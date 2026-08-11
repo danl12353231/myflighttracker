@@ -1,4 +1,4 @@
-name: Build iOS IPA
+name: Build iOS IPA (EAS)
 
 on:
   workflow_dispatch:
@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'apps/expo/**'
+      - '.github/workflows/build-ipa.yml'
 
 concurrency:
   group: ipa-${{ github.ref }}
@@ -13,14 +14,11 @@ concurrency:
 
 jobs:
   build-ipa:
-    name: Build IPA
-    runs-on: macos-15
+    name: Build IPA via EAS
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: apps/expo
-    env:
-      APP_NAME: myFlightTracker
-      BUNDLE_ID: com.myflighttracker.app
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,84 +39,35 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      - name: Prebuild iOS project
-        run: bunx expo prebuild --platform ios --no-install
+      - name: Set up EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Install CocoaPods
+      - name: Build iOS IPA
+        id: eas-build
         run: |
-          cd ios
-          pod install
+          eas build \
+            --platform ios \
+            --profile sideload \
+            --non-interactive \
+            --json > /tmp/eas-build.json
+          BUILD_ID=$(python3 -c "import json;d=json.load(open('/tmp/eas-build.json'));print(d[0]['id'] if isinstance(d,list) else d['id'])")
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          echo "Build ID: $BUILD_ID"
 
-      - name: Import signing certificate
+      - name: Download IPA
         run: |
-          if [ -n "$IOS_CERTIFICATE_P12" ]; then
-            echo "$IOS_CERTIFICATE_P12" | base64 --decode > /tmp/cert.p12
-            security create-keychain -p temp temp.keychain
-            security default-keychain -s temp.keychain
-            security unlock-keychain -p temp temp.keychain
-            security import /tmp/cert.p12 -k temp.keychain \
-              -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k temp temp.keychain
-          fi
-        env:
-          IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
-          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-
-      - name: Import provisioning profile
-        run: |
-          if [ -n "$IOS_PROVISIONING_PROFILE" ]; then
-            echo "$IOS_PROVISIONING_PROFILE" | base64 --decode > /tmp/profile.mobileprovision
-            mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-            cp /tmp/profile.mobileprovision \
-              ~/Library/MobileDevice/Provisioning\ Profiles/$(uuidgen).mobileprovision
-          fi
-        env:
-          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
-
-      - name: Archive app
-        run: |
-          xcodebuild archive \
-            -workspace ios/$APP_NAME.xcworkspace \
-            -scheme $APP_NAME \
-            -configuration Release \
-            -archivePath build/$APP_NAME.xcarchive \
-            -allowProvisioningUpdates \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="${{ secrets.IOS_TEAM_ID }}" \
-            PROVISIONING_PROFILE_SPECIFIER="${{ secrets.IOS_PROVISIONING_PROFILE_NAME }}"
-
-      - name: Export IPA
-        run: |
-          mkdir -p build/export
-          cat > build/export/ExportOptions.plist <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>${{ secrets.IOS_EXPORT_METHOD || 'development' }}</string>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>teamID</key>
-            <string>${{ secrets.IOS_TEAM_ID }}</string>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>${{ env.BUNDLE_ID }}</key>
-              <string>${{ secrets.IOS_PROVISIONING_PROFILE_NAME }}</string>
-            </dict>
-          </dict>
-          </plist>
-          EOF
-          xcodebuild -exportArchive \
-            -archivePath build/$APP_NAME.xcarchive \
-            -exportOptionsPlist build/export/ExportOptions.plist \
-            -exportPath build/export \
-            -allowProvisioningUpdates
+          eas build:download ${{ steps.eas-build.outputs.build_id }} \
+            --platform ios \
+            --output-dir build \
+            --non-interactive
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: myflighttracker-ios
+          name: myflighttracker-ios-ipa
           path: |
-            apps/expo/build/export/*.ipa
+            apps/expo/build/**/*.ipa
           if-no-files-found: error

@@ -38,21 +38,37 @@ Two workflows build the mobile app on every push to `main` (or on manual
 
 - **`.github/workflows/build-apk.yml`** — Android release APK (Ubuntu runner).
   Works out of the box, no secrets required. Artifact: `myflighttracker-android`.
-- **`.github/workflows/build-ipa.yml`** — iOS IPA (macOS runner). The app
-  compiles fine; producing a signed IPA requires Apple signing secrets:
+- **`.github/workflows/build-ipa.yml`** — iOS IPA built with **EAS Build**
+  (Expo's cloud build service). The signed IPA is downloaded back and attached
+  as a run artifact (`myflighttracker-ios-ipa`) for sideloading.
 
-| Secret | Purpose |
-|--------|---------|
-| `IOS_TEAM_ID` | Your Apple Developer team ID (e.g. `ABC123XYZ`) |
-| `IOS_CERTIFICATE_P12` | Base64 of a Distribution `.p12` cert |
-| `IOS_CERTIFICATE_PASSWORD` | Password for that cert |
-| `IOS_PROVISIONING_PROFILE` | Base64 of a `.mobileprovision` profile |
-| `IOS_PROVISIONING_PROFILE_NAME` | Profile name shown in Xcode |
-| `IOS_EXPORT_METHOD` | `app-store-connect`, `ad-hoc`, or `development` |
+### Prerequisites for the iOS (EAS) build
 
-Add these in **Settings → Secrets and variables → Actions** on the repository.
-Until the secrets are added, the iOS job builds up to code-signing and reports
-the missing-profile error — the workflow itself is configured correctly.
+1. Create a free account at [expo.dev](https://expo.dev) and generate a token:
+   **expo.dev → Account settings → Access tokens**. Copy the token.
+2. Add it as a repository secret: **Settings → Secrets and variables →
+   Actions → New repository secret**, name `EXPO_TOKEN`.
+3. Link the project to your Expo account once (from a machine with the Expo
+   CLI) so EAS knows the app's credentials:
+
+   ```bash
+   cd apps/expo
+   bunx eas-cli init
+   bunx eas-cli login
+   bunx eas-cli build:configure   # registers iOS signing credentials (ad-hoc)
+   ```
+
+   `eas init` adds `extra.eas.projectId` to `apps/expo/app.json`, which is
+   committed to the repo.
+
+4. `eas build` manages Apple signing for you. The `sideload` profile in
+   `apps/expo/eas.json` uses `distribution: internal` (ad-hoc), which is what
+   you need for sideloading the IPA onto your device. EAS will prompt you to
+   register the device UDID and create an ad-hoc provisioning profile on the
+   first build.
+
+Until `EXPO_TOKEN` is configured, the iOS workflow will fail at the EAS setup
+step. The Android workflow is unaffected.
 
 ## Mobile app (Expo)
 
