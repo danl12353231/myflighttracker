@@ -18,7 +18,7 @@ import { SearchSheet } from "../components/SearchSheet";
 import { useAuth } from "../lib/auth";
 import { useFlights, useUpcomingFlights } from "../lib/api";
 import { prepareVisitedAirports } from "../lib/visited-airports";
-import { useFontScale, fs } from "../lib/fonts";
+import { fs } from "../lib/fonts";
 import type { Flight, VisitedAirport } from "../lib/router";
 import { colors, spacing, statusMeta, type FlightStatus } from "../lib/theme";
 
@@ -51,7 +51,6 @@ type HomeTab = "mine" | "friends" | "passport";
 export default function MapHomeScreen() {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const scale = useFontScale();
   const router = useRouter();
   const { status: authStatus } = useAuth();
   const mapRef = useRef<MapViewHandle>(null);
@@ -155,8 +154,6 @@ export default function MapHomeScreen() {
     : Math.round(height * 0.42);
   const navBottom = insets.bottom + 12;
 
-  const s = (v: number) => Math.round(v * scale);
-
   return (
     <View style={styles.root}>
       {/* Map layer fills the screen */}
@@ -231,9 +228,7 @@ export default function MapHomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Pressable onPress={() => setExpanded((v) => !v)}>
-            <Text style={[styles.title, { fontSize: s(fs.title) }]}>
-              {title}
-            </Text>
+            <Text style={styles.title}>{title}</Text>
           </Pressable>
           <View style={styles.headerActions}>
             <Pressable
@@ -264,32 +259,18 @@ export default function MapHomeScreen() {
             <View style={styles.summaryRow}>
               {/* Remaining time */}
               <View style={styles.remaining}>
-                <Text
-                  style={[
-                    styles.remainingH,
-                    { fontSize: s(fs.remainingHours) },
-                  ]}
-                >
-                  {remainingLabel.hours}
-                </Text>
-                <Text style={[styles.remainingM, { fontSize: s(13) }]}>
-                  {remainingLabel.minutes}
-                </Text>
+                <Text style={styles.remainingH}>{remainingLabel.hours}</Text>
+                <Text style={styles.remainingM}>{remainingLabel.minutes}</Text>
               </View>
 
               {/* Route identity */}
               <View style={styles.routeInfo}>
-                <Text
-                  style={[styles.airlineMeta, { fontSize: s(fs.metadata) }]}
-                >
+                <Text style={styles.airlineMeta}>
                   {effectiveSelected
                     ? `${airlineOf(effectiveSelected)} ${effectiveSelected.flightNumber ?? ""}`.trim()
                     : "No flight"}
                 </Text>
-                <Text
-                  style={[styles.routeTitle, { fontSize: s(fs.route) }]}
-                  numberOfLines={1}
-                >
+                <Text style={styles.routeTitle} numberOfLines={2}>
                   {effectiveSelected
                     ? `${effectiveSelected.from?.municipality ?? "?"} to ${effectiveSelected.to?.municipality ?? "?"}`
                     : "Select a flight"}
@@ -298,10 +279,7 @@ export default function MapHomeScreen() {
                   <Text
                     style={[
                       styles.airportCode,
-                      {
-                        fontSize: s(fs.airportCode),
-                        color: colors.statusPositive,
-                      },
+                      { color: colors.statusPositive },
                     ]}
                   >
                     {effectiveSelected
@@ -311,10 +289,7 @@ export default function MapHomeScreen() {
                   <Text
                     style={[
                       styles.airportTime,
-                      {
-                        fontSize: s(fs.airportTime),
-                        color: colors.statusPositive,
-                      },
+                      { color: colors.statusPositive },
                     ]}
                   >
                     {effectiveSelected
@@ -332,10 +307,7 @@ export default function MapHomeScreen() {
                   <Text
                     style={[
                       styles.airportCode,
-                      {
-                        fontSize: s(fs.airportCode),
-                        color: colors.statusNegative,
-                      },
+                      { color: colors.statusNegative },
                     ]}
                   >
                     {effectiveSelected
@@ -345,10 +317,7 @@ export default function MapHomeScreen() {
                   <Text
                     style={[
                       styles.airportTime,
-                      {
-                        fontSize: s(fs.airportTime),
-                        color: colors.statusNegative,
-                      },
+                      { color: colors.statusNegative },
                     ]}
                   >
                     {effectiveSelected
@@ -363,17 +332,8 @@ export default function MapHomeScreen() {
 
               {/* Status */}
               <View style={styles.statusWrap}>
-                <Text
-                  style={[styles.statusLabel, { fontSize: s(fs.statusLabel) }]}
-                >
-                  {statusInfo.label}
-                </Text>
-                <Text
-                  style={[
-                    styles.statusState,
-                    { fontSize: s(fs.status), color: statusInfo.color },
-                  ]}
-                >
+                <Text style={styles.statusLabel}>{statusInfo.label}</Text>
+                <Text style={[styles.statusState, { color: statusInfo.color }]}>
                   {statusInfo.state}
                 </Text>
               </View>
@@ -395,16 +355,16 @@ export default function MapHomeScreen() {
                     ]}
                     onPress={() => pick(f)}
                   >
-                    <Text style={[styles.flightChipMain, { fontSize: s(14) }]}>
+                    <Text style={styles.flightChipMain}>
                       {codeOf(f, "from")} → {codeOf(f, "to")}
                     </Text>
-                    <Text style={[styles.flightChipSub, { fontSize: s(11) }]}>
+                    <Text style={styles.flightChipSub}>
                       {f.flightNumber ?? (airlineOf(f) || "Flight")} · {f.date}
                     </Text>
                   </Pressable>
                 ))}
                 {list.length === 0 ? (
-                  <Text style={[styles.empty, { fontSize: s(14) }]}>
+                  <Text style={styles.empty}>
                     {allFlights.isLoading
                       ? "Loading flights…"
                       : "No upcoming flights yet."}
@@ -579,7 +539,7 @@ const styles = StyleSheet.create({
 
   summaryRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 12,
     marginVertical: 14,
   },

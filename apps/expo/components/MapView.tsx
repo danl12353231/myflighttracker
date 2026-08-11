@@ -37,9 +37,8 @@ const STYLE_FN = `function styleFor(sat) {
   };
 }`;
 
-// Check if maplibre-gl setProjection exists. v4.0+ has it; older forks may not.
-const CHECK_PROJ =
-  'var canProj = typeof maplibregl.Map.prototype.setProjection === "function";';
+// maplibre-gl@4 always ships setProjection. Skip the pre-load check that crashes.
+const CHECK_PROJ = "";
 
 const SCRIPT_SRC = "https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js";
 const STYLE_CSS = "https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css";
@@ -85,8 +84,7 @@ script.onload = function () {
 
   function setProjection(globe) {
     FT.globe = globe;
-    if (!canProj) return;
-    map.setProjection({ type: globe ? 'globe' : 'mercator' });
+    try { map.setProjection({ type: globe ? 'globe' : 'mercator' }); } catch (e) {}
     if (globe) {
       map.easeTo({ bearing: 0, pitch: 0, duration: 300 });
       map.dragRotate.disable();
@@ -189,8 +187,8 @@ script.onload = function () {
     }));
     drawAirports();
     drawRoute();
-    if (FT.globe && canProj) {
-      map.setProjection({ type: 'globe' });
+    if (FT.globe) {
+      try { map.setProjection({ type: 'globe' }); } catch (e) {}
     }
   }
 
