@@ -31,6 +31,29 @@ Environment variables are documented in `web/.env.example` (`DB_URL`, `ORIGIN`,
 and OAuth/integration keys). On first run you create an owner account via the
 web UI.
 
+## Building the mobile app from GitHub Actions
+
+Two workflows build the mobile app on every push to `main` (or on manual
+`Run workflow`) and attach the artifacts to the run:
+
+- **`.github/workflows/build-apk.yml`** — Android release APK (Ubuntu runner).
+  Works out of the box, no secrets required. Artifact: `myflighttracker-android`.
+- **`.github/workflows/build-ipa.yml`** — iOS IPA (macOS runner). The app
+  compiles fine; producing a signed IPA requires Apple signing secrets:
+
+| Secret | Purpose |
+|--------|---------|
+| `IOS_TEAM_ID` | Your Apple Developer team ID (e.g. `ABC123XYZ`) |
+| `IOS_CERTIFICATE_P12` | Base64 of a Distribution `.p12` cert |
+| `IOS_CERTIFICATE_PASSWORD` | Password for that cert |
+| `IOS_PROVISIONING_PROFILE` | Base64 of a `.mobileprovision` profile |
+| `IOS_PROVISIONING_PROFILE_NAME` | Profile name shown in Xcode |
+| `IOS_EXPORT_METHOD` | `app-store-connect`, `ad-hoc`, or `development` |
+
+Add these in **Settings → Secrets and variables → Actions** on the repository.
+Until the secrets are added, the iOS job builds up to code-signing and reports
+the missing-profile error — the workflow itself is configured correctly.
+
 ## Mobile app (Expo)
 
 ### What's new in the backend for mobile
