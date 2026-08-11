@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
+  PanResponder,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -65,13 +68,64 @@ export default function MapHomeScreen() {
   const upcoming = useUpcomingFlights("mine");
   const friends = useUpcomingFlights("friends");
 
+  const [expanded, setExpanded] = useState(false);
+  const [tab, setTab] = useState<HomeTab>("mine");
   const [satellite, setSatellite] = useState(false);
   const [globe, setGlobe] = useState(false);
-  const [tab, setTab] = useState<HomeTab>("mine");
-  const [expanded, setExpanded] = useState(false);
   const [airportDetailsId, setAirportDetailsId] = useState<number | null>(null);
   const [flightDetailsId, setFlightDetailsId] = useState<number | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+
+  const MIN_H = Math.round(height * 0.34);
+  const COLLAPSED_H = Math.round(height * 0.42);
+  const MID_H = Math.round(height * 0.66);
+  const MAX_H = Math.round(height * 0.9);
+  const animHeight = useRef(new Animated.Value(COLLAPSED_H)).current;
+  const [isTall, setIsTall] = useState(false);
+
+  const dragStart = useRef({ y: 0, h: COLLAPSED_H });
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
+      onPanResponderGrant: () => {
+        animHeight.stopAnimation((h) => {
+          dragStart.current = { y: 0, h };
+        });
+      },
+      onPanResponderMove: (_, g) => {
+        const h = Math.max(MIN_H, Math.min(MAX_H, dragStart.current.h - g.dy));
+        animHeight.setValue(h);
+      },
+      onPanResponderRelease: () => {
+        animHeight.stopAnimation((h) => {
+          // Snap to nearest of COLLAPSED / MID / MAX.
+          const targets = [COLLAPSED_H, MID_H, MAX_H];
+          let best = COLLAPSED_H;
+          let bestDist = Infinity;
+          for (const t of targets) {
+            const d = Math.abs(h - t);
+            if (d < bestDist) {
+              bestDist = d;
+              best = t;
+            }
+          }
+          Animated.timing(animHeight, {
+            toValue: best,
+            duration: 200,
+            useNativeDriver: false,
+          }).start();
+        });
+      },
+    }),
+  ).current;
+
+  // Track whether the sheet is tall enough to show the flight list.
+  useEffect(() => {
+    const id = animHeight.addListener(({ value }) => {
+      setIsTall(value >= (COLLAPSED_H + MID_H) / 2);
+    });
+    return () => animHeight.removeListener(id);
+  }, [animHeight, COLLAPSED_H, MID_H]);
 
   const all = useMemo(() => allFlights.data ?? [], [allFlights.data]);
   const upcomingList = useMemo(() => upcoming.data ?? [], [upcoming.data]);
@@ -119,9 +173,16 @@ export default function MapHomeScreen() {
     return () => clearTimeout(id);
   }, [effectiveSelected]);
 
+  // Resize the dashboard when switching tabs.
+  const targetH = tab === "passport" ? MID_H : COLLAPSED_H;
   useEffect(() => {
-    if (tab === "passport") setExpanded(true);
-  }, [tab]);
+    setExpanded(tab === "passport");
+    Animated.timing(animHeight, {
+      toValue: targetH,
+      duration: 260,
+      useNativeDriver: false,
+    }).start();
+  }, [tab, targetH, animHeight]);
 
   const status = effectiveSelected
     ? deriveStatus(effectiveSelected)
@@ -144,9 +205,6 @@ export default function MapHomeScreen() {
     };
   }, [effectiveSelected]);
 
-  const dashboardH = expanded
-    ? Math.round(height * 0.66)
-    : Math.round(height * 0.42);
   const navBottom = insets.bottom + 12;
 
   return (
@@ -213,15 +271,30 @@ export default function MapHomeScreen() {
       </View>
 
       {/* Floating dark dashboard */}
-      <View
+      <Animated.View
+        {...panResponder.panHandlers}
         style={[
           styles.dashboard,
-          { height: dashboardH, paddingBottom: navBottom },
+          { height: animHeight, paddingBottom: navBottom },
         ]}
       >
+        {/* Drag handle */}
+        <View style={styles.dragHandle}>
+          <View style={styles.dragHandleBar} />
+        </View>
+
         {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={() => setExpanded((v) => !v)}>
+          <Pressable
+            onPress={() => {
+              Animated.timing(animHeight, {
+                toValue: expanded ? COLLAPSED_H : MID_H,
+                duration: 260,
+                useNativeDriver: false,
+              }).start();
+              setExpanded(!expanded);
+            }}
+          >
             <Text style={styles.title}>{title}</Text>
           </Pressable>
           <View style={styles.headerActions}>
@@ -341,6 +414,37 @@ export default function MapHomeScreen() {
             {list.length === 0 && !allFlights.isLoading ? (
               <Text style={styles.empty}>No upcoming flights yet.</Text>
             ) : null}
+
+            {isTall && list.length > 0 ? (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                style={styles.flightListScroll}
+                contentContainerStyle={styles.flightList}
+              >
+                {list.map((f) => (
+                  <Pressable
+                    key={f.id}
+                    style={styles.flightRow}
+                    onPress={() => {
+                      mapRef.current?.setFlight(f);
+                      setFlightDetailsId(f.id);
+                    }}
+                  >
+                    <View style={styles.flightRowLeft}>
+                      <Text style={styles.flightRowRoute}>
+                        {codeOf(f, "from")} → {codeOf(f, "to")}
+                      </Text>
+                      <Text style={styles.flightRowMeta} numberOfLines={1}>
+                        {f.flightNumber ?? (airlineOf(f) || "Flight")} ·{" "}
+                        {f.from?.municipality ?? "?"} →{" "}
+                        {f.to?.municipality ?? "?"}
+                      </Text>
+                    </View>
+                    <Text style={styles.flightRowDate}>{f.date}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
           </View>
         )}
 
@@ -373,7 +477,7 @@ export default function MapHomeScreen() {
             <Ionicons name="search" size={26} color={colors.textPrimary} />
           </Pressable>
         </View>
-      </View>
+      </Animated.View>
 
       <AirportDetailsSheet
         visible={!!airportDetails}
@@ -512,8 +616,40 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  listWrap: { flex: 1, justifyContent: "center" },
+  listWrap: { flex: 1, justifyContent: "flex-start", minHeight: 0 },
   passportWrap: { flex: 1, marginTop: 12, overflow: "hidden" },
+
+  dragHandle: {
+    alignItems: "center",
+    paddingTop: 8,
+    paddingBottom: 6,
+  },
+  dragHandleBar: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.borderSubtle,
+  },
+
+  flightListScroll: { flex: 1, marginTop: 8, minHeight: 0 },
+  flightList: { gap: 4, paddingBottom: 12 },
+  flightRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  flightRowLeft: { flex: 1, gap: 3, minWidth: 0 },
+  flightRowRoute: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.textPrimary,
+  },
+  flightRowMeta: { fontSize: 12, color: colors.textSecondary },
+  flightRowDate: { fontSize: 12, color: colors.textSecondary },
 
   summaryRow: {
     flexDirection: "row",
@@ -550,7 +686,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     marginTop: 2,
-    flexWrap: "wrap",
+    flexShrink: 1,
   },
   airportCode: { fontSize: 18, fontWeight: "600" },
   airportTime: { fontSize: 14, fontWeight: "600" },
@@ -558,28 +694,6 @@ const styles = StyleSheet.create({
   statusLabel: { fontSize: 12, color: colors.textSecondary },
   statusState: { fontSize: 14, fontWeight: "600" },
 
-  flightListScroll: { marginHorizontal: -6 },
-  flightList: {
-    flexDirection: "row",
-    gap: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-  },
-  flightChip: {
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-  },
-  flightChipActive: { borderColor: colors.accent },
-  flightChipMain: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.textPrimary,
-  },
-  flightChipSub: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
   empty: { color: colors.textSecondary, fontSize: 13, paddingVertical: 10 },
 
   navRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6 },

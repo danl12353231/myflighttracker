@@ -213,20 +213,23 @@ script.onload = function () {
     }
   });
 
-  // Layer-specific click handler for airport markers.
-  map.on('click', 'apt-casing', function (e) {
+  // Tap detection for airport markers.
+  map.on('click', function (e) {
     var feats = map.queryRenderedFeatures(e.point, { layers: ['apt-casing', 'apt-label'] });
     if (feats.length && feats[0].properties && feats[0].properties.id != null) {
       window.ReactNativeWebView.postMessage(
         JSON.stringify({ type: 'airport', id: Number(feats[0].properties.id) })
       );
+      return;
     }
-  });
-  map.on('click', 'apt-label', function (e) {
-    var feats = map.queryRenderedFeatures(e.point, { layers: ['apt-casing', 'apt-label'] });
-    if (feats.length && feats[0].properties && feats[0].properties.id != null) {
+    // Fallback: a slightly larger query window in case the marker is small.
+    var nearby = map.queryRenderedFeatures(
+      [[e.point.x - 12, e.point.y - 12], [e.point.x + 12, e.point.y + 12]],
+      { layers: ['apt-casing', 'apt-label'] }
+    );
+    if (nearby.length && nearby[0].properties && nearby[0].properties.id != null) {
       window.ReactNativeWebView.postMessage(
-        JSON.stringify({ type: 'airport', id: Number(feats[0].properties.id) })
+        JSON.stringify({ type: 'airport', id: Number(nearby[0].properties.id) })
       );
     }
   });
