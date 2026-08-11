@@ -44,6 +44,11 @@ jobs:
       - name: Prebuild iOS project
         run: bunx expo prebuild --platform ios --no-install
 
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install
+
       - name: Import signing certificate
         run: |
           if [ -n "$IOS_CERTIFICATE_P12" ]; then
