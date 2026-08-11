@@ -7,11 +7,11 @@ import type { Flight, VisitedAirport } from "../lib/router";
 const SATELLITE_TILES =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const DARK_TILES = "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+const LABEL_TILES =
+  "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
 
 type LonLat = [number, number];
 
-// Linear interpolation of lon/lat is visually smooth for short hops; good enough
-// for a geodesic-looking arc on the world map.
 export function buildRoute(a: LonLat, b: LonLat, steps = 60): LonLat[] {
   const pts: LonLat[] = [];
   for (let i = 0; i <= steps; i++) {
@@ -27,19 +27,24 @@ const STYLE_FN = `function styleFor(sat) {
     sources: {
       base: { type: 'raster', tiles: [ sat
         ? ${JSON.stringify(SATELLITE_TILES)}
-        : ${JSON.stringify(DARK_TILES)} ], tileSize: 256 }
+        : ${JSON.stringify(DARK_TILES)} ], tileSize: 256 },
+      labels: { type: 'raster', tiles: [${JSON.stringify(LABEL_TILES)}], tileSize: 256 }
     },
-    layers: [ { id: 'base', type: 'raster', source: 'base' } ]
+    layers: [
+      { id: 'base', type: 'raster', source: 'base' },
+      { id: 'labels', type: 'raster', source: 'labels' }
+    ]
   };
 }`;
+
+// Check if maplibre-gl setProjection exists. v4.0+ has it; older forks may not.
+const CHECK_PROJ =
+  'var canProj = typeof maplibregl.Map.prototype.setProjection === "function";';
 
 const SCRIPT_SRC = "https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js";
 const STYLE_CSS = "https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css";
 
-// The embedded map page. It reads an initial payload from window.__INIT__ and
-// listens for postMessage commands.
 const buildHtml = (init: {
-  satellite: boolean;
   route: LonLat[];
   secondary: LonLat[][];
   airports: { id: number; code: string; lon: number; lat: number }[];
@@ -53,6 +58,7 @@ const buildHtml = (init: {
 <body><div id="map"></div>
 <script>
 window.__INIT__ = ${JSON.stringify(init)};
+${CHECK_PROJ}
 ${STYLE_FN}
 var script = document.createElement('script');
 script.src = ${JSON.stringify(SCRIPT_SRC)};
@@ -68,16 +74,21 @@ script.onload = function () {
     zoom: 1.5,
     attributionControl: false
   });
-  var FT = { map: map, route: [], satellite: false, globe: false, airports: [] };
+  var FT = {
+    map: map,
+    route: [],
+    satellite: false,
+    globe: false,
+    airports: window.__INIT__.airports || []
+  };
   window.FT = FT;
 
   function setProjection(globe) {
     FT.globe = globe;
-    if (typeof map.setProjection === 'function') {
-      map.setProjection({ type: globe ? 'globe' : 'mercator' });
-    }
+    if (!canProj) return;
+    map.setProjection({ type: globe ? 'globe' : 'mercator' });
     if (globe) {
-      map.easeTo({ bearing: 0, pitch: 0, duration: 400 });
+      map.easeTo({ bearing: 0, pitch: 0, duration: 300 });
       map.dragRotate.disable();
       map.touchZoomRotate.disableRotation();
     } else {
@@ -90,35 +101,30 @@ script.onload = function () {
     }
   }
 
-  function drawSecondary() {
-    var feats = (window.__INIT__.secondary || []).map(function (pair) {
-      return { type: 'Feature', geometry: { type: 'LineString', coordinates: pair }, properties: {} };
-    });
+  function drawSecondary(feats) {
+    var fc = { type: 'FeatureCollection', features: feats };
     if (!map.getSource('secondary')) {
-      map.addSource('secondary', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      map.addLayer({ id: 'secondary', type: 'line', source: 'secondary', paint: { 'line-color': 'rgba(255,255,255,0.18)', 'line-width': 1.5 } });
+      map.addSource('secondary', { type: 'geojson', data: fc });
+      map.addLayer({ id: 'secondary', type: 'line', source: 'secondary',
+        paint: { 'line-color': 'rgba(255,255,255,0.18)', 'line-width': 1.5 } });
+    } else {
+      map.getSource('secondary').setData(fc);
     }
-    map.getSource('secondary').setData({ type: 'FeatureCollection', features: feats });
   }
 
   function drawAirports() {
-    if (!map.getSource('airports')) {
-      map.addSource('airports', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    if (!map.getSource('apts')) {
+      map.addSource('apts', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
       map.addLayer({
-        id: 'airport-casing',
-        type: 'circle',
-        source: 'airports',
-        paint: { 'circle-radius': 11, 'circle-color': '#0b0b0d', 'circle-opacity': 0.55, 'circle-stroke-width': 1, 'circle-stroke-color': 'rgba(255,255,255,0.4)' }
+        id: 'apt-casing', type: 'circle', source: 'apts',
+        paint: { 'circle-radius': 11, 'circle-color': '#0b0b0d', 'circle-opacity': 0.55,
+          'circle-stroke-width': 1, 'circle-stroke-color': 'rgba(255,255,255,0.4)' }
       });
       map.addLayer({
-        id: 'airports',
-        type: 'symbol',
-        source: 'airports',
+        id: 'apt-label', type: 'symbol', source: 'apts',
         layout: {
-          'text-field': ['get', 'code'],
-          'text-size': 11,
-          'text-allow-overlap': true,
-          'text-ignore-placement': true,
+          'text-field': ['get', 'code'], 'text-size': 11,
+          'text-allow-overlap': true, 'text-ignore-placement': true,
           'text-anchor': 'center'
         },
         paint: { 'text-color': '#ffffff', 'text-halo-color': 'rgba(11,11,13,0.85)', 'text-halo-width': 1.5 }
@@ -126,29 +132,40 @@ script.onload = function () {
     }
     var feats = FT.airports.map(function (a) {
       return {
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
+        type: 'Feature', geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
         properties: { id: a.id, code: a.code }
       };
     });
-    map.getSource('airports').setData({ type: 'FeatureCollection', features: feats });
+    map.getSource('apts').setData({ type: 'FeatureCollection', features: feats });
   }
 
   function drawRoute() {
     var r = FT.route;
-    if (r.length < 2) return;
+    if (r.length < 2) {
+      if (map.getSource('route-line')) {
+        map.getSource('route-line').setData({ type:'FeatureCollection', features:[] });
+      }
+      return;
+    }
     if (!map.getSource('route-line')) {
       map.addSource('route-line', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      map.addLayer({ id: 'route-casing', type: 'line', source: 'route-line', paint: { 'line-color': 'rgba(10,132,255,0.25)', 'line-width': 9 } });
-      map.addLayer({ id: 'route-line', type: 'line', source: 'route-line', paint: { 'line-color': '#0A84FF', 'line-width': 5 } });
+      map.addLayer({ id: 'route-casing', type: 'line', source: 'route-line',
+        paint: { 'line-color': 'rgba(10,132,255,0.25)', 'line-width': 9 } });
+      map.addLayer({ id: 'route-line', type: 'line', source: 'route-line',
+        paint: { 'line-color': '#0A84FF', 'line-width': 5 } });
       map.addSource('origin-pt', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      map.addLayer({ id: 'origin-pt', type: 'circle', source: 'origin-pt', paint: { 'circle-radius': 7, 'circle-color': '#30D158', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } });
+      map.addLayer({ id: 'origin-pt', type: 'circle', source: 'origin-pt',
+        paint: { 'circle-radius': 7, 'circle-color': '#30D158', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } });
       map.addSource('dest-pt', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      map.addLayer({ id: 'dest-pt', type: 'circle', source: 'dest-pt', paint: { 'circle-radius': 7, 'circle-color': '#FF453A', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } });
+      map.addLayer({ id: 'dest-pt', type: 'circle', source: 'dest-pt',
+        paint: { 'circle-radius': 7, 'circle-color': '#FF453A', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } });
     }
-    map.getSource('route-line').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: r }, properties: {} }] });
-    map.getSource('origin-pt').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: r[0] }, properties: {} }] });
-    map.getSource('dest-pt').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: r[r.length-1] }, properties: {} }] });
+    map.getSource('route-line').setData({ type: 'FeatureCollection',
+      features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: r }, properties: {} }] });
+    map.getSource('origin-pt').setData({ type: 'FeatureCollection',
+      features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: r[0] }, properties: {} }] });
+    map.getSource('dest-pt').setData({ type: 'FeatureCollection',
+      features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: r[r.length-1] }, properties: {} }] });
   }
 
   function fit() {
@@ -165,20 +182,38 @@ script.onload = function () {
     fit();
   }
 
-  map.on('load', function () {
-    drawSecondary();
+  function reDrawAll() {
+    var secondary = window.__INIT__.secondary || [];
+    drawSecondary(secondary.map(function (pair) {
+      return { type: 'Feature', geometry: { type: 'LineString', coordinates: pair }, properties: {} };
+    }));
     drawAirports();
+    drawRoute();
+    if (FT.globe && canProj) {
+      map.setProjection({ type: 'globe' });
+    }
+  }
+
+  map.on('load', function () {
+    reDrawAll();
     applyRoute(window.__INIT__.route);
   });
 
-  // Tap detection for airport markers: query rendered features at the tap point.
-  map.on('click', function (e) {
-    var feats = map.queryRenderedFeatures(e.point, { layers: ['airports', 'airport-casing'] });
-    if (feats.length && feats[0].properties) {
-      var id = feats[0].properties.id;
-      if (id != null && window.ReactNativeWebView) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'airport', id: Number(id) }));
-      }
+  // Layer-specific click handler for airport markers.
+  map.on('click', 'apt-casing', function (e) {
+    var feats = map.queryRenderedFeatures(e.point, { layers: ['apt-casing', 'apt-label'] });
+    if (feats.length && feats[0].properties && feats[0].properties.id != null) {
+      window.ReactNativeWebView.postMessage(
+        JSON.stringify({ type: 'airport', id: Number(feats[0].properties.id) })
+      );
+    }
+  });
+  map.on('click', 'apt-label', function (e) {
+    var feats = map.queryRenderedFeatures(e.point, { layers: ['apt-casing', 'apt-label'] });
+    if (feats.length && feats[0].properties && feats[0].properties.id != null) {
+      window.ReactNativeWebView.postMessage(
+        JSON.stringify({ type: 'airport', id: Number(feats[0].properties.id) })
+      );
     }
   });
 
@@ -189,7 +224,7 @@ script.onload = function () {
     } else if (d.type === 'satellite') {
       FT.satellite = d.value;
       map.setStyle(styleFor(d.value));
-      map.once('styledata', function () { drawSecondary(); drawAirports(); drawRoute(); });
+      map.once('styledata', reDrawAll);
     } else if (d.type === 'projection') {
       setProjection(!!d.value);
     } else if (d.type === 'airports') {
@@ -249,7 +284,7 @@ export const MapView = forwardRef<
       lon: a.lon,
       lat: a.lat,
     }));
-    return buildHtml({ satellite: false, route, secondary, airports: markers });
+    return buildHtml({ route, secondary, airports: markers });
   }, [flights, airports, selectedId]);
 
   useImperativeHandle(ref, () => ({
