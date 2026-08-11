@@ -38,43 +38,24 @@ Two workflows build the mobile app on every push to `main` (or on manual
 
 - **`.github/workflows/build-apk.yml`** — Android release APK (Ubuntu runner).
   Works out of the box, no secrets required. Artifact: `myflighttracker-android`.
-- **`.github/workflows/build-ipa.yml`** — iOS IPA built with **EAS Build**
-  (Expo's cloud build service). The signed IPA is downloaded back and attached
-  as a run artifact (`myflighttracker-ios-ipa`) for sideloading.
+- **`.github/workflows/build-ipa.yml`** — iOS **unsigned IPA** (macOS runner).
+  Builds the app natively with code signing disabled and packages the result
+  as an `.ipa`. Artifact: `myflighttracker-ios-ipa`.
 
-### Prerequisites for the iOS (EAS) build
+### iOS IPA without an Apple Developer account
 
-1. Create a free account at [expo.dev](https://expo.dev) and generate a token:
-   **expo.dev → Account settings → Access tokens**. Copy the token.
-2. Add it as a repository secret: **Settings → Secrets and variables →
-   Actions → New repository secret**, name `EXPO_TOKEN`.
-3. Link the project to your Expo account once (from a machine with the Expo
-   CLI) so EAS knows the app's credentials:
+The iOS build does **not** require an Apple Developer account. It produces an
+**unsigned** IPA by building with `CODE_SIGNING_ALLOWED=NO`. To install it on
+your iPhone you sideload it with a tool that signs it using a **free Apple ID**:
 
-   ```bash
-   cd apps/expo
-   bunx eas-cli init --account danlah
-   ```
+- **Sideloadly** (macOS/Windows) — drag the IPA in, enter your Apple ID, it
+  re-signs and installs.
+- **AltStore / AltServer** (macOS/Windows) — install AltStore once, then import
+  the IPA from Files.
+- **TrollStore** (if your iOS version is supported) — installs unsigned IPAs
+  directly without signing.
 
-   `eas init` adds `extra.eas.projectId` to `apps/expo/app.json`, which is
-   committed to the repo.
-
-4. iOS signing is managed by EAS. For sideloading an IPA you need an Apple
-   Developer account (ad-hoc distribution). EAS creates the ad-hoc certificate
-   and provisioning profile automatically. In CI it runs non-interactively, so
-   provide your Apple credentials as repository secrets:
-
-   - `EXPO_APPLE_ID` — your Apple Developer account email
-   - `EXPO_APPLE_PASSWORD` — your Apple Developer account password (or
-     an app-specific password)
-
-   Then the workflow can create credentials without prompting. You will also
-   need to register the device UDID you'll sideload onto (EAS prompts for this
-   on the first interactive run, or you can add it in the EAS dashboard).
-
-Until `EXPO_TOKEN` (and `EXPO_APPLE_ID`/`EXPO_APPLE_PASSWORD` for iOS signing)
-are configured, the iOS workflow fails at the EAS build/credentials step. The
-Android workflow is unaffected.
+No repository secrets are required for the iOS workflow.
 
 ## Mobile app (Expo)
 

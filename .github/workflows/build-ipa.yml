@@ -1,4 +1,4 @@
-name: Build iOS IPA (EAS)
+name: Build iOS IPA (unsigned)
 
 on:
   workflow_dispatch:
@@ -14,8 +14,8 @@ concurrency:
 
 jobs:
   build-ipa:
-    name: Build IPA via EAS
-    runs-on: ubuntu-latest
+    name: Build unsigned IPA
+    runs-on: macos-15
     defaults:
       run:
         working-directory: apps/expo
@@ -39,41 +39,37 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      - name: Set up EAS
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Prebuild iOS project
+        run: bunx expo prebuild --platform ios --no-install
 
-      - name: Link project to EAS
-        run: eas init --account danlah --non-interactive
-
-      - name: Build iOS IPA
-        id: eas-build
-        env:
-          EXPO_APPLE_ID: ${{ secrets.EXPO_APPLE_ID }}
-          EXPO_APPLE_PASSWORD: ${{ secrets.EXPO_APPLE_PASSWORD }}
+      - name: Install CocoaPods
         run: |
-          eas build \
-            --platform ios \
-            --profile sideload \
-            --non-interactive \
-            --json > /tmp/eas-build.json
-          BUILD_ID=$(python3 -c "import json;d=json.load(open('/tmp/eas-build.json'));print(d[0]['id'] if isinstance(d,list) else d['id'])")
-          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
-          echo "Build ID: $BUILD_ID"
+          cd ios
+          pod install
 
-      - name: Download IPA
+      - name: Archive app (no code signing)
         run: |
-          eas build:download ${{ steps.eas-build.outputs.build_id }} \
-            --platform ios \
-            --output-dir build \
-            --non-interactive
+          xcodebuild archive \
+            -workspace ios/myFlightTracker.xcworkspace \
+            -scheme myFlightTracker \
+            -configuration Release \
+            -archivePath build/myFlightTracker.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p build/ipa/Payload
+          cp -R build/myFlightTracker.xcarchive/Products/Applications/myFlightTracker.app \
+            build/ipa/Payload/
+          cd build/ipa
+          zip -q -r ../myFlightTracker.ipa Payload
+          ls -lh ../myFlightTracker.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
           name: myflighttracker-ios-ipa
-          path: |
-            apps/expo/build/**/*.ipa
+          path: apps/expo/build/myFlightTracker.ipa
           if-no-files-found: error
