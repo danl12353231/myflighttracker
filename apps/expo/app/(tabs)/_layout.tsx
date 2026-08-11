@@ -1,18 +1,24 @@
-import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Tabs } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: true,
-        tabBarActiveTintColor: '#1a73e8',
+        headerShown: false,
+        tabBarActiveTintColor: "#0A84FF",
+        tabBarStyle: {
+          backgroundColor: "#1B1B1E",
+          borderTopColor: "rgba(255,255,255,0.08)",
+        },
+        tabBarInactiveTintColor: "#99999F",
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Flights',
+          title: "Home",
+          tabBarStyle: { display: "none" },
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="airplane" size={size} color={color} />
           ),
@@ -21,7 +27,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="map"
         options={{
-          title: 'Map',
+          title: "Map",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="map" size={size} color={color} />
           ),
@@ -30,7 +36,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="stats"
         options={{
-          title: 'Stats',
+          title: "Stats",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="bar-chart" size={size} color={color} />
           ),
@@ -39,7 +45,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
+          title: "Settings",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings" size={size} color={color} />
           ),

@@ -1,95 +1,97 @@
-import { StyleSheet, View } from 'react-native';
-import { WebView } from 'react-native-webview';
+import { useRef, useState } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 
-import { useAuth } from '../../lib/auth';
-import { useFlights } from '../../lib/api';
-import { useMemo } from 'react';
-
-const MAP_HTML = (token: string, flightsJson: string) => `
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no">
-<style>
-  html, body, #map { margin: 0; height: 100%; width: 100%; }
-</style>
-<script>
-  (function () {
-    var token = ${JSON.stringify(token)};
-    var flights = ${flightsJson};
-    // Load maplibre-gl from CDN
-    var script = document.createElement('script');
-    script.src = 'https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js';
-    script.onload = function () {
-      var style = document.createElement('link');
-      style.rel = 'stylesheet';
-      style.href = 'https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css';
-      document.head.appendChild(style);
-      init(flights);
-    };
-    document.head.appendChild(script);
-    function init(flights) {
-      var map = new maplibregl.Map({
-        container: 'map',
-        style: 'https://demotiles.maplibre.org/style.json',
-        center: [0, 20],
-        zoom: 1.5
-      });
-      map.addControl(new maplibregl.NavigationControl(), 'top-right');
-      map.on('load', function () {
-        var features = [];
-        flights.forEach(function (f) {
-          if (f.from && f.to) {
-            features.push({
-              type: 'Feature',
-              geometry: {
-                type: 'LineString',
-                coordinates: [[f.from.lon, f.from.lat], [f.to.lon, f.to.lat]]
-              },
-              properties: { id: f.id, code: (f.from.iata||f.from.icao) + ' → ' + (f.to.iata||f.to.icao) }
-            });
-          }
-        });
-        map.addSource('arcs', { type: 'geojson', data: { type: 'FeatureCollection', features: features } });
-        map.addLayer({
-          id: 'arcs',
-          type: 'line',
-          source: 'arcs',
-          paint: { 'line-color': '#1a73e8', 'line-width': 2, 'line-opacity': 0.8 }
-        });
-      });
-    }
-  })();
-</script>
-</head>
-<body><div id="map"></div></body>
-</html>
-`;
+import { MapView, type MapViewHandle } from "../../components/MapView";
+import { useFlights } from "../../lib/api";
+import { colors, spacing } from "../../lib/theme";
 
 export default function MapScreen() {
-  const { token } = useAuth();
-  const flights = useFlights('mine');
+  const insets = useSafeAreaInsets();
+  const mapRef = useRef<MapViewHandle>(null);
+  const flights = useFlights("mine");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [satellite, setSatellite] = useState(false);
 
-  const html = useMemo(() => {
-    if (!token) return '';
-    return MAP_HTML(token, JSON.stringify(flights.data ?? []));
-  }, [token, flights.data]);
+  const pick = (id: number | null) => {
+    setSelectedId(id);
+    const f = (flights.data ?? []).find((x) => x.id === id) ?? null;
+    setTimeout(() => mapRef.current?.setFlight(f), 50);
+  };
 
   return (
-    <View style={styles.container}>
-      {html ? (
-        <WebView
-          originWhitelist={['*']}
-          source={{ html }}
-          style={styles.web}
-          javaScriptEnabled
+    <View style={styles.root}>
+      <View style={StyleSheet.absoluteFill}>
+        <MapView
+          ref={mapRef}
+          flights={flights.data ?? []}
+          selectedId={selectedId}
         />
-      ) : null}
+      </View>
+
+      <View style={[styles.controls, { top: insets.top + 16 }]}>
+        <View style={styles.pill}>
+          <Pressable
+            style={styles.btn}
+            onPress={() => {
+              const next = !satellite;
+              setSatellite(next);
+              mapRef.current?.setSatellite(next);
+            }}
+          >
+            <Ionicons
+              name="layers-outline"
+              size={20}
+              color={colors.textPrimary}
+            />
+          </Pressable>
+          <Pressable style={styles.btn}>
+            <Ionicons
+              name="cloud-outline"
+              size={20}
+              color={colors.textPrimary}
+            />
+          </Pressable>
+        </View>
+        <Pressable
+          style={styles.recenter}
+          onPress={() => mapRef.current?.recenter()}
+        >
+          <Ionicons name="locate" size={20} color={colors.textPrimary} />
+        </Pressable>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  web: { flex: 1 },
+  root: { flex: 1, backgroundColor: "#0b0b0d" },
+  controls: {
+    position: "absolute",
+    right: spacing.mapControlRight,
+    gap: 10,
+    zIndex: 10,
+  },
+  pill: {
+    width: 60,
+    borderRadius: 30,
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    paddingVertical: 6,
+    alignItems: "center",
+  },
+  btn: { padding: 9, alignItems: "center" },
+  recenter: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "flex-end",
+  },
 });
