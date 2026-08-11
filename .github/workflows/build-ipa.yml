@@ -45,23 +45,30 @@ jobs:
         run: bunx expo prebuild --platform ios --no-install
 
       - name: Import signing certificate
-        if: ${{ secrets.IOS_CERTIFICATE_P12 != '' }}
         run: |
-          echo "$IOS_CERTIFICATE_P12" | base64 --decode > /tmp/cert.p12
-          security create-keychain -p temp temp.keychain
-          security default-keychain -s temp.keychain
-          security unlock-keychain -p temp temp.keychain
-          security import /tmp/cert.p12 -k temp.keychain \
-            -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k temp temp.keychain
+          if [ -n "$IOS_CERTIFICATE_P12" ]; then
+            echo "$IOS_CERTIFICATE_P12" | base64 --decode > /tmp/cert.p12
+            security create-keychain -p temp temp.keychain
+            security default-keychain -s temp.keychain
+            security unlock-keychain -p temp temp.keychain
+            security import /tmp/cert.p12 -k temp.keychain \
+              -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k temp temp.keychain
+          fi
+        env:
+          IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
 
       - name: Import provisioning profile
-        if: ${{ secrets.IOS_PROVISIONING_PROFILE != '' }}
         run: |
-          echo "$IOS_PROVISIONING_PROFILE" | base64 --decode > /tmp/profile.mobileprovision
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp /tmp/profile.mobileprovision \
-            ~/Library/MobileDevice/Provisioning\ Profiles/$(uuidgen).mobileprovision
+          if [ -n "$IOS_PROVISIONING_PROFILE" ]; then
+            echo "$IOS_PROVISIONING_PROFILE" | base64 --decode > /tmp/profile.mobileprovision
+            mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+            cp /tmp/profile.mobileprovision \
+              ~/Library/MobileDevice/Provisioning\ Profiles/$(uuidgen).mobileprovision
+          fi
+        env:
+          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
 
       - name: Archive app
         run: |
