@@ -156,7 +156,16 @@ export const createTrpcClient = (url: string, token: string | null) => {
         },
       }),
     ],
-    transformer: SuperJSON,
+    transformer: {
+      input: {
+        serialize: (object: unknown) => SuperJSON.stringify(object),
+        deserialize: (object: string) => SuperJSON.parse(object),
+      },
+      output: {
+        serialize: (object: unknown) => SuperJSON.stringify(object),
+        deserialize: (object: string) => SuperJSON.parse(object),
+      },
+    },
   });
   return proxy as unknown as TrpcClient;
 };
