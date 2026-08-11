@@ -12,14 +12,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { MapView, type MapViewHandle } from "../../components/MapView";
+import { AirportDetailsSheet } from "../../components/AirportDetailsSheet";
 import { useFlights } from "../../lib/api";
+import { prepareVisitedAirports } from "../../lib/visited-airports";
+import type { Flight, VisitedAirport } from "../../lib/router";
 import {
   colors,
   spacing,
   statusMeta,
   type FlightStatus,
 } from "../../lib/theme";
-import type { Flight } from "../../lib/router";
 
 const formatTime = (iso: string | null | undefined) => {
   if (!iso) return "--:--";
@@ -60,6 +62,7 @@ export default function MapHomeScreen() {
   const [globe, setGlobe] = useState(false);
   const [tab, setTab] = useState<"mine" | "friends" | "passport">("mine");
   const [expanded, setExpanded] = useState(false);
+  const [airportDetailsId, setAirportDetailsId] = useState<number | null>(null);
 
   const all = useMemo(() => flights.data ?? [], [flights.data]);
   const friends = useMemo(
@@ -71,6 +74,20 @@ export default function MapHomeScreen() {
     if (tab === "passport") return all;
     return upcoming.data ?? [];
   }, [tab, friends, all, upcoming.data]);
+
+  const visitedAirports = useMemo(() => prepareVisitedAirports(all), [all]);
+
+  const airportDetails = useMemo(
+    () => visitedAirports.find((a) => a.id === airportDetailsId) ?? null,
+    [visitedAirports, airportDetailsId],
+  );
+  const airportFlights = useMemo(
+    () =>
+      all.filter(
+        (f) => f.from?.id === airportDetailsId || f.to?.id === airportDetailsId,
+      ),
+    [all, airportDetailsId],
+  );
 
   const selected = useMemo(
     () => all.find((f) => f.id === selectedId) ?? null,
@@ -128,7 +145,9 @@ export default function MapHomeScreen() {
         <MapView
           ref={mapRef}
           flights={all}
+          airports={visitedAirports}
           selectedId={effectiveSelected ? effectiveSelected.id : null}
+          onAirportTap={(id) => setAirportDetailsId(id)}
         />
       </View>
 
@@ -345,6 +364,18 @@ export default function MapHomeScreen() {
           </Pressable>
         </View>
       </View>
+
+      <AirportDetailsSheet
+        visible={!!airportDetails}
+        airport={airportDetails}
+        relatedFlights={airportFlights}
+        onClose={() => setAirportDetailsId(null)}
+        onShowFlight={(id) => {
+          setAirportDetailsId(null);
+          const f = all.find((x) => x.id === id);
+          if (f) pick(f);
+        }}
+      />
     </View>
   );
 }

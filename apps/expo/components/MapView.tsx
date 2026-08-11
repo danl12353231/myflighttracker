@@ -2,7 +2,7 @@ import { forwardRef, useImperativeHandle, useMemo, useRef } from "react";
 import { StyleSheet } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
-import type { Flight } from "../lib/router";
+import type { Flight, VisitedAirport } from "../lib/router";
 
 const SATELLITE_TILES =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
@@ -42,6 +42,7 @@ const buildHtml = (init: {
   satellite: boolean;
   route: LonLat[];
   secondary: LonLat[][];
+  airports: { id: number; code: string; lon: number; lat: number }[];
 }) =>
   `<!DOCTYPE html>
 <html>
@@ -67,7 +68,7 @@ script.onload = function () {
     zoom: 1.5,
     attributionControl: false
   });
-  var FT = { map: map, route: [], satellite: false, globe: false };
+  var FT = { map: map, route: [], satellite: false, globe: false, airports: [] };
   window.FT = FT;
 
   function setProjection(globe) {
@@ -75,7 +76,6 @@ script.onload = function () {
     if (typeof map.setProjection === 'function') {
       map.setProjection({ type: globe ? 'globe' : 'mercator' });
     }
-    // Globe doesn't support rotation/bearing; keep the camera square.
     if (globe) {
       map.easeTo({ bearing: 0, pitch: 0, duration: 400 });
       map.dragRotate.disable();
@@ -99,6 +99,39 @@ script.onload = function () {
       map.addLayer({ id: 'secondary', type: 'line', source: 'secondary', paint: { 'line-color': 'rgba(255,255,255,0.18)', 'line-width': 1.5 } });
     }
     map.getSource('secondary').setData({ type: 'FeatureCollection', features: feats });
+  }
+
+  function drawAirports() {
+    if (!map.getSource('airports')) {
+      map.addSource('airports', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      map.addLayer({
+        id: 'airport-casing',
+        type: 'circle',
+        source: 'airports',
+        paint: { 'circle-radius': 11, 'circle-color': '#0b0b0d', 'circle-opacity': 0.55, 'circle-stroke-width': 1, 'circle-stroke-color': 'rgba(255,255,255,0.4)' }
+      });
+      map.addLayer({
+        id: 'airports',
+        type: 'symbol',
+        source: 'airports',
+        layout: {
+          'text-field': ['get', 'code'],
+          'text-size': 11,
+          'text-allow-overlap': true,
+          'text-ignore-placement': true,
+          'text-anchor': 'center'
+        },
+        paint: { 'text-color': '#ffffff', 'text-halo-color': 'rgba(11,11,13,0.85)', 'text-halo-width': 1.5 }
+      });
+    }
+    var feats = FT.airports.map(function (a) {
+      return {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
+        properties: { id: a.id, code: a.code }
+      };
+    });
+    map.getSource('airports').setData({ type: 'FeatureCollection', features: feats });
   }
 
   function drawRoute() {
@@ -134,7 +167,19 @@ script.onload = function () {
 
   map.on('load', function () {
     drawSecondary();
+    drawAirports();
     applyRoute(window.__INIT__.route);
+  });
+
+  // Tap detection for airport markers: query rendered features at the tap point.
+  map.on('click', function (e) {
+    var feats = map.queryRenderedFeatures(e.point, { layers: ['airports', 'airport-casing'] });
+    if (feats.length && feats[0].properties) {
+      var id = feats[0].properties.id;
+      if (id != null && window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'airport', id: Number(id) }));
+      }
+    }
   });
 
   window.addEventListener('message', function (e) {
@@ -144,9 +189,12 @@ script.onload = function () {
     } else if (d.type === 'satellite') {
       FT.satellite = d.value;
       map.setStyle(styleFor(d.value));
-      map.once('styledata', function () { drawSecondary(); drawRoute(); });
+      map.once('styledata', function () { drawSecondary(); drawAirports(); drawRoute(); });
     } else if (d.type === 'projection') {
       setProjection(!!d.value);
+    } else if (d.type === 'airports') {
+      FT.airports = d.airports || [];
+      drawAirports();
     } else if (d.type === 'recenter' && FT.route.length > 1) {
       var mid = FT.route[Math.floor(FT.route.length / 2)];
       map.flyTo({ center: mid, zoom: Math.max(map.getZoom(), 5), duration: 900 });
@@ -161,6 +209,7 @@ export type MapViewHandle = {
   setFlight: (flight: Flight | null) => void;
   setSatellite: (value: boolean) => void;
   setProjection: (globe: boolean) => void;
+  setAirports: (airports: VisitedAirport[]) => void;
   recenter: () => void;
 };
 
@@ -168,10 +217,11 @@ export const MapView = forwardRef<
   MapViewHandle,
   {
     flights: Flight[];
+    airports: VisitedAirport[];
     selectedId: number | null;
-    onAirportTap?: (iata: string) => void;
+    onAirportTap?: (id: number) => void;
   }
->(function MapView({ flights, selectedId, onAirportTap }, ref) {
+>(function MapView({ flights, airports, selectedId, onAirportTap }, ref) {
   const webRef = useRef<any>(null);
 
   const html = useMemo(() => {
@@ -193,8 +243,14 @@ export const MapView = forwardRef<
             [f.to!.lon, f.to!.lat],
           ] as LonLat[],
       );
-    return buildHtml({ satellite: false, route, secondary });
-  }, [flights, selectedId]);
+    const markers = airports.map((a) => ({
+      id: a.id,
+      code: a.iata ?? a.icao,
+      lon: a.lon,
+      lat: a.lat,
+    }));
+    return buildHtml({ satellite: false, route, secondary, airports: markers });
+  }, [flights, airports, selectedId]);
 
   useImperativeHandle(ref, () => ({
     setFlight(flight) {
@@ -222,6 +278,19 @@ export const MapView = forwardRef<
         JSON.stringify({ type: "projection", value: globe }),
       );
     },
+    setAirports(list) {
+      webRef.current?.postMessage(
+        JSON.stringify({
+          type: "airports",
+          airports: list.map((a) => ({
+            id: a.id,
+            code: a.iata ?? a.icao,
+            lon: a.lon,
+            lat: a.lat,
+          })),
+        }),
+      );
+    },
     recenter() {
       webRef.current?.postMessage(JSON.stringify({ type: "recenter" }));
     },
@@ -230,7 +299,9 @@ export const MapView = forwardRef<
   const handleMessage = (e: WebViewMessageEvent) => {
     try {
       const d = JSON.parse(e.nativeEvent.data);
-      if (d.type === "airport" && onAirportTap) onAirportTap(d.iata);
+      if (d.type === "airport" && typeof d.id === "number" && onAirportTap) {
+        onAirportTap(d.id);
+      }
     } catch {
       /* ignore */
     }

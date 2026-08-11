@@ -12,14 +12,14 @@ export type Airport = {
   name: string;
   municipality: string | null;
   type:
-    | 'large_airport'
-    | 'medium_airport'
-    | 'small_airport'
-    | 'heliport'
-    | 'seaplane_base'
-    | 'balloonport'
-    | 'closed';
-  continent: 'EU' | 'NA' | 'SA' | 'AS' | 'AF' | 'OC' | 'AN';
+    | "large_airport"
+    | "medium_airport"
+    | "small_airport"
+    | "heliport"
+    | "seaplane_base"
+    | "balloonport"
+    | "closed";
+  continent: "EU" | "NA" | "SA" | "AS" | "AF" | "OC" | "AN";
   country: string;
   custom: boolean;
 };
@@ -40,21 +40,21 @@ export type Airline = {
   sourceId: string | null;
 };
 
-export type UserRole = 'user' | 'admin' | 'owner';
+export type UserRole = "user" | "admin" | "owner";
 
 export type User = {
   id: string;
   username: string;
   displayName: string;
   role: UserRole;
-  distanceUnit: 'km' | 'mi' | 'nm';
-  windSpeedUnit: 'kt' | 'mph' | 'kmh' | 'ms';
-  temperatureUnit: 'c' | 'f';
-  pressureUnit: 'hpa' | 'inhg';
-  timeFormat: '12h' | '24h' | 'auto';
-  dateFormat: 'iso' | 'us' | 'eu' | 'auto';
-  weekStartsOn: 'mon' | 'sun' | 'auto';
-  flightTimeDisplay: 'airport' | 'utc' | 'system';
+  distanceUnit: "km" | "mi" | "nm";
+  windSpeedUnit: "kt" | "mph" | "kmh" | "ms";
+  temperatureUnit: "c" | "f";
+  pressureUnit: "hpa" | "inhg";
+  timeFormat: "12h" | "24h" | "auto";
+  dateFormat: "iso" | "us" | "eu" | "auto";
+  weekStartsOn: "mon" | "sun" | "auto";
+  flightTimeDisplay: "airport" | "utc" | "system";
 };
 
 export type FlightPassenger = {
@@ -63,24 +63,24 @@ export type FlightPassenger = {
   userId: string | null;
   guestName: string | null;
   seat:
-    | 'window'
-    | 'aisle'
-    | 'middle'
-    | 'pilot'
-    | 'copilot'
-    | 'jumpseat'
-    | 'other'
+    | "window"
+    | "aisle"
+    | "middle"
+    | "pilot"
+    | "copilot"
+    | "jumpseat"
+    | "other"
     | null;
   seatNumber: string | null;
-  seatClass: 'economy' | 'economy+' | 'business' | 'first' | 'private' | null;
-  flightReason: 'leisure' | 'business' | 'crew' | 'other' | null;
+  seatClass: "economy" | "economy+" | "business" | "first" | "private" | null;
+  flightReason: "leisure" | "business" | "crew" | "other" | null;
   user: { id: string; displayName: string; username: string } | null;
 };
 
 export type Flight = {
   id: number;
   date: string;
-  datePrecision: 'day' | 'month' | 'year';
+  datePrecision: "day" | "month" | "year";
   departure: string | null;
   arrival: string | null;
   departureScheduled: string | null;
@@ -109,16 +109,16 @@ export type CreateFlightPassenger = {
   id?: number;
   userId?: string | null;
   guestName?: string | null;
-  seat?: FlightPassenger['seat'];
+  seat?: FlightPassenger["seat"];
   seatNumber?: string | null;
-  seatClass?: FlightPassenger['seatClass'];
-  flightReason?: FlightPassenger['flightReason'];
+  seatClass?: FlightPassenger["seatClass"];
+  flightReason?: FlightPassenger["flightReason"];
   customFields?: Record<string, unknown>;
 };
 
 export type CreateFlight = {
   date: string;
-  datePrecision?: 'day' | 'month' | 'year';
+  datePrecision?: "day" | "month" | "year";
   departure?: string | null;
   arrival?: string | null;
   departureScheduled?: string | null;
@@ -153,7 +153,7 @@ export type UpdateFlightInput = {
 export type FlightTrackRow = {
   flightId: number;
   track: unknown;
-  sourceFormat: 'gpx' | 'kml' | 'csv' | 'readsb';
+  sourceFormat: "gpx" | "kml" | "csv" | "readsb";
   sourceName: string | null;
   pointCount: number;
 };
@@ -161,7 +161,7 @@ export type FlightTrackRow = {
 export type VisitedCountry = {
   id: number;
   code: string;
-  status: 'lived' | 'visited' | 'layover' | 'wishlist';
+  status: "lived" | "visited" | "layover" | "wishlist";
   note: string | null;
   userId: string;
 };
@@ -195,21 +195,21 @@ export type ApiKey = {
 
 export type CustomFieldDefinition = {
   id: number;
-  entityType: 'flight' | 'flight_passenger';
+  entityType: "flight" | "flight_passenger";
   key: string;
   label: string;
   description: string | null;
   fieldType:
-    | 'text'
-    | 'textarea'
-    | 'number'
-    | 'boolean'
-    | 'date'
-    | 'select'
-    | 'multi-select'
-    | 'airport'
-    | 'airline'
-    | 'aircraft';
+    | "text"
+    | "textarea"
+    | "number"
+    | "boolean"
+    | "date"
+    | "select"
+    | "multi-select"
+    | "airport"
+    | "airline"
+    | "aircraft";
   required: boolean;
   active: boolean;
   order: number;
@@ -220,16 +220,49 @@ export type CustomFieldDefinition = {
 export type Preferences = Partial<
   Pick<
     User,
-    | 'distanceUnit'
-    | 'windSpeedUnit'
-    | 'temperatureUnit'
-    | 'pressureUnit'
-    | 'timeFormat'
-    | 'dateFormat'
-    | 'weekStartsOn'
-    | 'flightTimeDisplay'
+    | "distanceUnit"
+    | "windSpeedUnit"
+    | "temperatureUnit"
+    | "pressureUnit"
+    | "timeFormat"
+    | "dateFormat"
+    | "weekStartsOn"
+    | "flightTimeDisplay"
   >
 >;
+
+export type ParsedMetar = {
+  raw: string;
+  station: string;
+  observedAtIso: string;
+  wind: {
+    dirDeg: number | null;
+    speedKt: number;
+    gustKt: number | null;
+    varies?: { from: number; to: number } | null;
+  };
+  visibilityM: number;
+  cavok: boolean;
+  clouds: Array<{
+    coverage: "SKC" | "FEW" | "SCT" | "BKN" | "OVC";
+    baseFt: number;
+    modifier?: "CB" | "TCU" | null;
+  }>;
+  verticalVisibilityFt: number | null;
+  tempC: number | null;
+  dewpointC: number | null;
+  pressureHpa: number | null;
+  flightCategory: "VFR" | "MVFR" | "IFR" | "LIFR";
+};
+
+// Airport enriched with counts over the user's loaded flights. Mirrors
+// prepareVisitedAirports from the web app.
+export type VisitedAirport = Airport & {
+  departures: number;
+  arrivals: number;
+  airlines: number[];
+  frequency: number;
+};
 
 export type ShareCreateInput = {
   slug?: string;
@@ -257,8 +290,8 @@ export type PublicShareSettings = {
   showTracks: boolean;
 };
 
-export type FlightScope = 'mine' | 'user' | 'all';
-export type UpcomingScope = 'mine' | 'friends';
+export type FlightScope = "mine" | "user" | "all";
+export type UpcomingScope = "mine" | "friends";
 
 // -- Router declaration ------------------------------------------------------
 
@@ -346,20 +379,26 @@ export type AppRouter = {
   customField: {
     listDefinitions: {
       query: {
-        input: { entityType: 'flight' | 'flight_passenger'; includeInactive?: boolean };
+        input: {
+          entityType: "flight" | "flight_passenger";
+          includeInactive?: boolean;
+        };
         output: CustomFieldDefinition[];
       };
     };
     getEntityValues: {
       query: {
-        input: { entityType: 'flight' | 'flight_passenger'; entityId: number | string };
+        input: {
+          entityType: "flight" | "flight_passenger";
+          entityId: number | string;
+        };
         output: Record<string, unknown>;
       };
     };
     setEntityValues: {
       mutation: {
         input: {
-          entityType: 'flight' | 'flight_passenger';
+          entityType: "flight" | "flight_passenger";
           entityId: number | string;
           values: Record<string, unknown>;
         };
@@ -371,7 +410,11 @@ export type AppRouter = {
     list: { query: { input: void; output: VisitedCountry[] } };
     save: {
       mutation: {
-        input: { code: string; status: VisitedCountry['status'] | null; note?: string | null };
+        input: {
+          code: string;
+          status: VisitedCountry["status"] | null;
+          note?: string | null;
+        };
         output: boolean;
       };
     };
@@ -400,6 +443,6 @@ export type AppRouter = {
     };
   };
   weather: {
-    getMetar: { query: { input: string; output: unknown } };
+    getMetar: { query: { input: string; output: ParsedMetar | null } };
   };
 };

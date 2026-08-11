@@ -1,10 +1,12 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import { MapView, type MapViewHandle } from "../../components/MapView";
+import { AirportDetailsSheet } from "../../components/AirportDetailsSheet";
 import { useFlights } from "../../lib/api";
+import { prepareVisitedAirports } from "../../lib/visited-airports";
 import { colors, spacing } from "../../lib/theme";
 
 export default function MapScreen() {
@@ -14,10 +16,25 @@ export default function MapScreen() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [satellite, setSatellite] = useState(false);
   const [globe, setGlobe] = useState(false);
+  const [airportDetailsId, setAirportDetailsId] = useState<number | null>(null);
+
+  const all = useMemo(() => flights.data ?? [], [flights.data]);
+  const visitedAirports = useMemo(() => prepareVisitedAirports(all), [all]);
+  const airportDetails = useMemo(
+    () => visitedAirports.find((a) => a.id === airportDetailsId) ?? null,
+    [visitedAirports, airportDetailsId],
+  );
+  const airportFlights = useMemo(
+    () =>
+      all.filter(
+        (f) => f.from?.id === airportDetailsId || f.to?.id === airportDetailsId,
+      ),
+    [all, airportDetailsId],
+  );
 
   const pick = (id: number | null) => {
     setSelectedId(id);
-    const f = (flights.data ?? []).find((x) => x.id === id) ?? null;
+    const f = all.find((x) => x.id === id) ?? null;
     setTimeout(() => mapRef.current?.setFlight(f), 50);
   };
 
@@ -26,10 +43,23 @@ export default function MapScreen() {
       <View style={StyleSheet.absoluteFill}>
         <MapView
           ref={mapRef}
-          flights={flights.data ?? []}
+          flights={all}
+          airports={visitedAirports}
           selectedId={selectedId}
+          onAirportTap={(id) => setAirportDetailsId(id)}
         />
       </View>
+
+      <AirportDetailsSheet
+        visible={!!airportDetails}
+        airport={airportDetails}
+        relatedFlights={airportFlights}
+        onClose={() => setAirportDetailsId(null)}
+        onShowFlight={(id) => {
+          setAirportDetailsId(null);
+          pick(id);
+        }}
+      />
 
       <View style={[styles.controls, { top: insets.top + 16 }]}>
         <View style={styles.pill}>
