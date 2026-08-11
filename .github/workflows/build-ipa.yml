@@ -45,6 +45,9 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
+      - name: Link project to EAS
+        run: eas init --account danlah --non-interactive
+
       - name: Build iOS IPA
         id: eas-build
         run: |
