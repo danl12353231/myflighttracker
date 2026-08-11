@@ -11,6 +11,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useDeleteFlight, useFlights } from "../../lib/api";
+import { FlightStatusCard } from "../../components/FlightStatusCard";
 import { colors } from "../../lib/theme";
 import type { Flight } from "../../lib/router";
 
@@ -122,6 +123,8 @@ export default function FlightDetailScreen() {
             </View>
           </View>
         </View>
+
+        <FlightStatusCard flightNumber={flight.flightNumber} date={flight.date} />
 
         <View style={styles.card}>
           <DetailRow

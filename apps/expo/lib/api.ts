@@ -320,8 +320,19 @@ export const useExportCsv = () => {
   });
 };
 
-export const useMetar = (icao: string | null) => {
+export const useFlightStatus = (flightNumber: string | null, date?: string) => {
   const { status } = useAuth();
+  const client = useClient()!;
+  return useQuery({
+    queryKey: ["flightStatus", flightNumber, date],
+    queryFn: () => client.flight.status.query({ flightNumber: flightNumber!, date }),
+    enabled: status === "authenticated" && !!flightNumber,
+    staleTime: 60 * 1000,
+    retry: 0,
+  });
+};
+
+export const useMetar = (icao: string | null) => {  const { status } = useAuth();
   const client = useClient()!;
   return useQuery({
     queryKey: ["metar", icao],

@@ -264,6 +264,54 @@ export type VisitedAirport = Airport & {
   frequency: number;
 };
 
+// Live flight status scraped from FlightStats. Mirrors FlightStatusResult.
+export type FlightStatusResult = {
+  source: {
+    provider: "FlightStats";
+    url: string;
+    flightId: number;
+    retrievedAt: string;
+  };
+  flight: {
+    flightNumber: string;
+    carrierCode: string;
+    carrierName: string | null;
+    status: {
+      code: string | null;
+      name: string | null;
+      description: string | null;
+      state: string | null;
+      phase: string | null;
+      cancelled: boolean;
+      diverted: boolean;
+      tracking: boolean;
+    };
+    departure: FlightStatusLeg;
+    arrival: FlightStatusLeg;
+    aircraft: {
+      registration: string | null;
+      typeCode: string | null;
+      typeName: string | null;
+    };
+  };
+};
+
+export type FlightStatusLeg = {
+  airport: {
+    iata: string | null;
+    name: string | null;
+    timeZone: string | null;
+    terminal: string | null;
+    gate: string | null;
+  };
+  delayMinutes: number | null;
+  time: {
+    scheduledUtc: string | null;
+    bestKnownUtc: string | null;
+    bestKnownType: "actual" | "estimated" | null;
+  };
+};
+
 export type ShareCreateInput = {
   slug?: string;
   expiresAt?: string;
@@ -342,6 +390,12 @@ export type AppRouter = {
     };
     lookupAircraftByReg: {
       query: { input: string; output: Aircraft | null };
+    };
+    status: {
+      query: {
+        input: { flightNumber: string; date?: string };
+        output: FlightStatusResult;
+      };
     };
   };
   flightTrack: {

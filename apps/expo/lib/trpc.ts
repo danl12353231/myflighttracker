@@ -56,6 +56,11 @@ export type TrpcClient = {
     deleteAll: { mutate: () => Promise<void> };
     exportJson: { query: () => Promise<string> };
     exportCsv: { query: () => Promise<string> };
+    status: {
+      query: (input: { flightNumber: string; date?: string }) => Promise<
+        import("./router").FlightStatusResult
+      >;
+    };
   };
   flightTrack: {
     list: {

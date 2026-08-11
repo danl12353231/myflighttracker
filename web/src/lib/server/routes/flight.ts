@@ -18,6 +18,10 @@ import {
 } from '$lib/server/utils/flight';
 import { getAircraftFromReg } from '$lib/server/utils/flight-lookup/aerodatabox';
 import { getFlightRoute } from '$lib/server/utils/flight-lookup/flight-lookup';
+import {
+  FlightStatsError,
+  scrapeFlightStatus,
+} from '$lib/server/utils/flight-lookup/flightstats';
 import { validateFlightImportPermissions } from '$lib/server/utils/flight-import';
 import {
   createFlightPrimitiveWithConnection,
@@ -364,4 +368,30 @@ export const flightRouter = router({
 
     return generateCsv(flights);
   }),
+  status: authedProcedure
+    .input(
+      z.object({
+        flightNumber: z.string(),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      }),
+    )
+    .query(async ({ input }) => {
+      try {
+        return await scrapeFlightStatus(
+          input.flightNumber,
+          input.date,
+        );
+      } catch (error) {
+        if (error instanceof FlightStatsError) {
+          throw new TRPCError({
+            code: error.status === 404 ? 'NOT_FOUND' : 'BAD_REQUEST',
+            message: error.message,
+          });
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to retrieve flight status',
+        });
+      }
+    }),
 });
