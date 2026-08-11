@@ -6,25 +6,26 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+} from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
-import { useDeleteFlight, useFlights } from '../../lib/api';
-import type { Flight } from '../../lib/router';
+import { useDeleteFlight, useFlights } from "../../lib/api";
+import { colors } from "../../lib/theme";
+import type { Flight } from "../../lib/router";
 
 const formatTime = (iso: string | null) => {
-  if (!iso) return '—';
+  if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
 const formatDate = (flight: Flight) => {
   const d = new Date(flight.date);
   return d.toLocaleDateString([], {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
+    year: "numeric",
+    month: "short",
+    day: "numeric",
   });
 };
 
@@ -32,7 +33,7 @@ export default function FlightDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const flightId = Number(id);
-  const flights = useFlights('mine');
+  const flights = useFlights("mine");
   const deleteFlight = useDeleteFlight();
 
   const flight = (flights.data ?? []).find((f: Flight) => f.id === flightId);
@@ -57,11 +58,11 @@ export default function FlightDetailScreen() {
   const to = flight.to;
 
   const handleDelete = () => {
-    Alert.alert('Delete flight', 'Delete this flight?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert("Delete flight", "Delete this flight?", [
+      { text: "Cancel", style: "cancel" },
       {
-        text: 'Delete',
-        style: 'destructive',
+        text: "Delete",
+        style: "destructive",
         onPress: async () => {
           await deleteFlight.mutateAsync(flight.id);
           router.back();
@@ -81,14 +82,14 @@ export default function FlightDetailScreen() {
           onPress={() => router.push(`/flight/edit/${flight.id}`)}
           style={styles.backBtn}
         >
-          <Ionicons name="create-outline" size={22} color="#1a73e8" />
+          <Ionicons name="create-outline" size={22} color={colors.accent} />
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
           <Text style={styles.flightNumber}>
-            {flight.flightNumber ?? 'Flight'}
+            {flight.flightNumber ?? "Flight"}
           </Text>
           <Text style={styles.date}>{formatDate(flight)}</Text>
           {flight.airline ? (
@@ -99,23 +100,21 @@ export default function FlightDetailScreen() {
         <View style={styles.card}>
           <View style={styles.route}>
             <View style={styles.endpoint}>
-              <Text style={styles.code}>
-                {from?.iata ?? from?.icao ?? '—'}
-              </Text>
+              <Text style={styles.code}>{from?.iata ?? from?.icao ?? "—"}</Text>
               <Text style={styles.city}>
-                {from?.municipality ?? from?.name ?? 'Unknown'}
+                {from?.municipality ?? from?.name ?? "Unknown"}
               </Text>
               <Text style={styles.time}>
                 {formatTime(flight.departure ?? flight.departureScheduled)}
               </Text>
             </View>
             <View style={styles.routeIcon}>
-              <Ionicons name="airplane" size={20} color="#1a73e8" />
+              <Ionicons name="airplane" size={20} color={colors.accent} />
             </View>
-            <View style={[styles.endpoint, { alignItems: 'flex-end' }]}>
-              <Text style={styles.code}>{to?.iata ?? to?.icao ?? '—'}</Text>
+            <View style={[styles.endpoint, { alignItems: "flex-end" }]}>
+              <Text style={styles.code}>{to?.iata ?? to?.icao ?? "—"}</Text>
               <Text style={styles.city}>
-                {to?.municipality ?? to?.name ?? 'Unknown'}
+                {to?.municipality ?? to?.name ?? "Unknown"}
               </Text>
               <Text style={styles.time}>
                 {formatTime(flight.arrival ?? flight.arrivalScheduled)}
@@ -129,25 +128,31 @@ export default function FlightDetailScreen() {
             label="Aircraft"
             value={
               flight.aircraft
-                ? `${flight.aircraft.name}${flight.aircraftReg ? ` (${flight.aircraftReg})` : ''}`
-                : '—'
+                ? `${flight.aircraft.name}${flight.aircraftReg ? ` (${flight.aircraftReg})` : ""}`
+                : "—"
             }
           />
           <DetailRow
             label="Duration"
-            value={flight.duration ? `${Math.round(flight.duration / 60)} min` : '—'}
+            value={
+              flight.duration ? `${Math.round(flight.duration / 60)} min` : "—"
+            }
           />
           <DetailRow
             label="Departure terminal/gate"
-            value={[flight.departureTerminal, flight.departureGate]
-              .filter(Boolean)
-              .join(' · ') || '—'}
+            value={
+              [flight.departureTerminal, flight.departureGate]
+                .filter(Boolean)
+                .join(" · ") || "—"
+            }
           />
           <DetailRow
             label="Arrival terminal/gate"
-            value={[flight.arrivalTerminal, flight.arrivalGate]
-              .filter(Boolean)
-              .join(' · ') || '—'}
+            value={
+              [flight.arrivalTerminal, flight.arrivalGate]
+                .filter(Boolean)
+                .join(" · ") || "—"
+            }
           />
           {flight.note ? <DetailRow label="Note" value={flight.note} /> : null}
         </View>
@@ -155,14 +160,14 @@ export default function FlightDetailScreen() {
         {flight.passengers.length > 0 ? (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Passengers</Text>
-            {flight.passengers.map((p: Flight['passengers'][number]) => (
+            {flight.passengers.map((p: Flight["passengers"][number]) => (
               <View key={p.id} style={styles.passenger}>
                 <Text style={styles.passengerName}>
-                  {p.user?.displayName ?? p.guestName ?? 'Unknown'}
+                  {p.user?.displayName ?? p.guestName ?? "Unknown"}
                 </Text>
                 <Text style={styles.passengerSeat}>
-                  {p.seatClass ? p.seatClass.toUpperCase() : ''}
-                  {p.seatNumber ? ` · ${p.seatNumber}` : ''}
+                  {p.seatClass ? p.seatClass.toUpperCase() : ""}
+                  {p.seatNumber ? ` · ${p.seatNumber}` : ""}
                 </Text>
               </View>
             ))}
@@ -174,7 +179,7 @@ export default function FlightDetailScreen() {
           onPress={handleDelete}
           activeOpacity={0.7}
         >
-          <Ionicons name="trash" size={18} color="#d43b3b" />
+          <Ionicons name="trash" size={18} color={colors.statusNegative} />
           <Text style={styles.deleteText}>Delete flight</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -194,55 +199,61 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f7' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  container: { flex: 1, backgroundColor: colors.backgroundPrimary },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 8,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.backgroundPrimary,
   },
   backBtn: { padding: 8 },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '600', textAlign: 'center' },
+  headerTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: "600",
+    textAlign: "center",
+    color: colors.textPrimary,
+  },
   content: { padding: 16, gap: 12, paddingBottom: 40 },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: 16,
     padding: 16,
     gap: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
   },
-  flightNumber: { fontSize: 24, fontWeight: '700', color: '#111' },
-  date: { fontSize: 15, color: '#666' },
-  airline: { fontSize: 14, color: '#888' },
-  route: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  flightNumber: { fontSize: 24, fontWeight: "700", color: colors.textPrimary },
+  date: { fontSize: 15, color: colors.textSecondary },
+  airline: { fontSize: 14, color: colors.textSecondary },
+  route: { flexDirection: "row", alignItems: "center", gap: 12 },
   endpoint: { flex: 1, gap: 2 },
-  code: { fontSize: 26, fontWeight: '700', color: '#111' },
-  city: { fontSize: 14, color: '#666' },
-  time: { fontSize: 14, color: '#1a73e8', fontWeight: '600', marginTop: 4 },
-  routeIcon: { width: 40, alignItems: 'center' },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#111' },
-  detailRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
-  detailLabel: { fontSize: 14, color: '#888' },
-  detailValue: { fontSize: 14, color: '#111', flex: 1, textAlign: 'right' },
-  passenger: { flexDirection: 'row', justifyContent: 'space-between' },
-  passengerName: { fontSize: 15, color: '#111' },
-  passengerSeat: { fontSize: 14, color: '#666' },
+  code: { fontSize: 26, fontWeight: "700", color: colors.textPrimary },
+  city: { fontSize: 14, color: colors.textSecondary },
+  time: { fontSize: 14, color: colors.accent, fontWeight: "600", marginTop: 4 },
+  routeIcon: { width: 40, alignItems: "center" },
+  sectionTitle: { fontSize: 16, fontWeight: "600", color: colors.textPrimary },
+  detailRow: { flexDirection: "row", justifyContent: "space-between", gap: 16 },
+  detailLabel: { fontSize: 14, color: colors.textSecondary },
+  detailValue: {
+    fontSize: 14,
+    color: colors.textPrimary,
+    flex: 1,
+    textAlign: "right",
+  },
+  passenger: { flexDirection: "row", justifyContent: "space-between" },
+  passengerName: { fontSize: 15, color: colors.textPrimary },
+  passengerSeat: { fontSize: 14, color: colors.textSecondary },
   deleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     padding: 14,
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#e3a3a3',
-    backgroundColor: '#fff',
+    borderColor: colors.statusNegative,
+    backgroundColor: colors.backgroundSecondary,
   },
-  deleteText: { color: '#d43b3b', fontSize: 15, fontWeight: '600' },
+  deleteText: { color: colors.statusNegative, fontSize: 15, fontWeight: "600" },
 });

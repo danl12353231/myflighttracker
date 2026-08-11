@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -7,31 +7,31 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { useRouter } from 'expo-router';
+} from "react-native";
+import { useRouter } from "expo-router";
 
-import { useAuth } from '../lib/auth';
+import { useAuth } from "../lib/auth";
 
 export default function LoginScreen() {
   const router = useRouter();
   const { signIn, clearServer, serverUrl } = useAuth();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const handleLogin = async () => {
     if (!username.trim() || !password) {
-      setError('Enter your username and password');
+      setError("Enter your username and password");
       return;
     }
     setError(null);
     setBusy(true);
     try {
       await signIn(username, password);
-      router.replace('/(tabs)');
+      router.replace("/");
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Login failed');
+      setError(e instanceof Error ? e.message : "Login failed");
     } finally {
       setBusy(false);
     }
@@ -40,7 +40,7 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={styles.content}>
         <Text style={styles.server}>{serverUrl}</Text>
@@ -79,7 +79,7 @@ export default function LoginScreen() {
           disabled={busy}
         >
           <Text style={styles.buttonText}>
-            {busy ? 'Signing in…' : 'Sign in'}
+            {busy ? "Signing in…" : "Sign in"}
           </Text>
         </TouchableOpacity>
 
@@ -94,64 +94,64 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     padding: 24,
     gap: 14,
   },
   server: {
     fontSize: 13,
-    color: '#888',
-    textAlign: 'center',
+    color: "#888",
+    textAlign: "center",
   },
   title: {
     fontSize: 28,
-    fontWeight: '700',
-    color: '#111',
-    textAlign: 'center',
+    fontWeight: "700",
+    color: "#111",
+    textAlign: "center",
   },
   subtitle: {
     fontSize: 15,
     lineHeight: 22,
-    color: '#555',
-    textAlign: 'center',
+    color: "#555",
+    textAlign: "center",
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
     borderRadius: 10,
     padding: 14,
     fontSize: 16,
-    color: '#111',
-    backgroundColor: '#fafafa',
+    color: "#111",
+    backgroundColor: "#fafafa",
   },
   error: {
-    color: '#d43b3b',
+    color: "#d43b3b",
     fontSize: 14,
   },
   button: {
-    backgroundColor: '#1a73e8',
+    backgroundColor: "#1a73e8",
     borderRadius: 10,
     padding: 16,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 4,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   link: {
-    color: '#1a73e8',
+    color: "#1a73e8",
     fontSize: 15,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: 8,
   },
 });

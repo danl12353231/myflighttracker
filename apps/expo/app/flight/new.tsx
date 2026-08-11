@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -7,12 +7,17 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+} from "react-native";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
-import { FlightForm, emptyFormValues, type FlightFormValues } from '../../components/FlightForm';
-import { useCreateFlight } from '../../lib/api';
+import {
+  FlightForm,
+  emptyFormValues,
+  type FlightFormValues,
+} from "../../components/FlightForm";
+import { useCreateFlight } from "../../lib/api";
+import { colors } from "../../lib/theme";
 
 export default function NewFlightScreen() {
   const router = useRouter();
@@ -22,11 +27,14 @@ export default function NewFlightScreen() {
 
   const handleSave = async () => {
     if (!form.from || !form.to) {
-      Alert.alert('Missing airports', 'Choose both departure and arrival airports.');
+      Alert.alert(
+        "Missing airports",
+        "Choose both departure and arrival airports.",
+      );
       return;
     }
     if (!form.date) {
-      Alert.alert('Missing date', 'Enter a date for the flight.');
+      Alert.alert("Missing date", "Enter a date for the flight.");
       return;
     }
     setBusy(true);
@@ -45,7 +53,10 @@ export default function NewFlightScreen() {
       });
       router.back();
     } catch (e) {
-      Alert.alert('Could not save flight', e instanceof Error ? e.message : 'Unknown error');
+      Alert.alert(
+        "Could not save flight",
+        e instanceof Error ? e.message : "Unknown error",
+      );
     } finally {
       setBusy(false);
     }
@@ -54,15 +65,22 @@ export default function NewFlightScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
-          <Ionicons name="chevron-back" size={24} color="#111" />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.headerBtn}
+        >
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Add flight</Text>
-        <TouchableOpacity onPress={handleSave} disabled={busy} style={styles.headerBtn}>
-          <Text style={styles.saveText}>{busy ? 'Saving…' : 'Save'}</Text>
+        <TouchableOpacity
+          onPress={handleSave}
+          disabled={busy}
+          style={styles.headerBtn}
+        >
+          <Text style={styles.saveText}>{busy ? "Saving…" : "Save"}</Text>
         </TouchableOpacity>
       </View>
       <FlightForm value={form} onChange={setForm} />
@@ -71,16 +89,16 @@ export default function NewFlightScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f7' },
+  container: { flex: 1, backgroundColor: colors.backgroundPrimary },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 8,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.backgroundPrimary,
   },
   headerBtn: { padding: 8 },
-  headerTitle: { fontSize: 18, fontWeight: '600' },
-  saveText: { color: '#1a73e8', fontSize: 16, fontWeight: '600' },
+  headerTitle: { fontSize: 18, fontWeight: "600", color: colors.textPrimary },
+  saveText: { color: colors.accent, fontSize: 16, fontWeight: "600" },
 });

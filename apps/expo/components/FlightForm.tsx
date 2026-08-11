@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -7,16 +7,22 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import {
   useAircraftSearch,
   useAirlineSearch,
   useAirportSearch,
   useCustomFieldDefinitions,
-} from '../lib/api';
-import type { Aircraft, Airline, Airport, CustomFieldDefinition } from '../lib/router';
+} from "../lib/api";
+import { colors } from "../lib/theme";
+import type {
+  Aircraft,
+  Airline,
+  Airport,
+  CustomFieldDefinition,
+} from "../lib/router";
 
 export type FlightFormValues = {
   date: string;
@@ -32,9 +38,9 @@ export type FlightFormValues = {
 
 export const emptyFormValues = (): FlightFormValues => ({
   date: new Date().toISOString().slice(0, 10),
-  flightNumber: '',
-  aircraftReg: '',
-  note: '',
+  flightNumber: "",
+  aircraftReg: "",
+  note: "",
   from: null,
   to: null,
   airline: null,
@@ -49,18 +55,19 @@ export function FlightForm({
   value: FlightFormValues;
   onChange: (next: FlightFormValues) => void;
 }) {
-  const [fromQuery, setFromQuery] = useState('');
-  const [toQuery, setToQuery] = useState('');
-  const [airlineQuery, setAirlineQuery] = useState('');
-  const [aircraftQuery, setAircraftQuery] = useState('');
+  const [fromQuery, setFromQuery] = useState("");
+  const [toQuery, setToQuery] = useState("");
+  const [airlineQuery, setAirlineQuery] = useState("");
+  const [aircraftQuery, setAircraftQuery] = useState("");
 
   const fromSearch = useAirportSearch(fromQuery, !value.from);
   const toSearch = useAirportSearch(toQuery, !value.to);
   const airlineSearch = useAirlineSearch(airlineQuery, !value.airline);
   const aircraftSearch = useAircraftSearch(aircraftQuery, !value.aircraft);
-  const flightDefs = useCustomFieldDefinitions('flight');
+  const flightDefs = useCustomFieldDefinitions("flight");
 
-  const set = (patch: Partial<FlightFormValues>) => onChange({ ...value, ...patch });
+  const set = (patch: Partial<FlightFormValues>) =>
+    onChange({ ...value, ...patch });
 
   const setCustomField = (key: string, v: unknown) => {
     set({ customFields: { ...value.customFields, [key]: v } });
@@ -132,7 +139,11 @@ export function FlightForm({
         <Text style={styles.label}>Aircraft type</Text>
         <EntityPicker
           labelKey="name"
-          selected={value.aircraft ? `${value.aircraft.name}${value.aircraft.icao ? ` (${value.aircraft.icao})` : ''}` : null}
+          selected={
+            value.aircraft
+              ? `${value.aircraft.name}${value.aircraft.icao ? ` (${value.aircraft.icao})` : ""}`
+              : null
+          }
           query={aircraftQuery}
           onQueryChange={setAircraftQuery}
           results={aircraftSearch.data ?? []}
@@ -179,7 +190,7 @@ function CustomFieldInput({
 }) {
   const options = (def.options as string[] | null) ?? [];
 
-  if (def.fieldType === 'boolean') {
+  if (def.fieldType === "boolean") {
     return (
       <View style={styles.toggleRow}>
         <Text style={styles.fieldLabel}>{def.label}</Text>
@@ -188,7 +199,7 @@ function CustomFieldInput({
     );
   }
 
-  if (def.fieldType === 'select' && options.length > 0) {
+  if (def.fieldType === "select" && options.length > 0) {
     return (
       <View style={styles.selectWrap}>
         <Text style={styles.fieldLabel}>{def.label}</Text>
@@ -201,7 +212,9 @@ function CustomFieldInput({
                 style={[styles.chip, active && styles.chipActive]}
                 onPress={() => onChange(active ? null : opt)}
               >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                <Text
+                  style={[styles.chipText, active && styles.chipTextActive]}
+                >
                   {opt}
                 </Text>
               </TouchableOpacity>
@@ -213,32 +226,36 @@ function CustomFieldInput({
   }
 
   const keyboardType =
-    def.fieldType === 'number'
-      ? 'numeric'
-      : def.fieldType === 'date'
-        ? 'numbers-and-punctuation'
-        : 'default';
-  const current = value == null ? '' : String(value);
+    def.fieldType === "number"
+      ? "numeric"
+      : def.fieldType === "date"
+        ? "numbers-and-punctuation"
+        : "default";
+  const current = value == null ? "" : String(value);
 
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>
         {def.label}
-        {def.required ? ' *' : ''}
+        {def.required ? " *" : ""}
       </Text>
       <TextInput
-        style={[styles.input, def.fieldType === 'textarea' && styles.noteInput]}
+        style={[styles.input, def.fieldType === "textarea" && styles.noteInput]}
         value={current}
         onChangeText={(text) => onChange(text || null)}
-        placeholder={def.description ?? ''}
+        placeholder={def.description ?? ""}
         placeholderTextColor="#aaa"
         keyboardType={keyboardType}
-        multiline={def.fieldType === 'textarea'}
-        editable={def.fieldType !== 'airport' && def.fieldType !== 'airline' && def.fieldType !== 'aircraft'}
+        multiline={def.fieldType === "textarea"}
+        editable={
+          def.fieldType !== "airport" &&
+          def.fieldType !== "airline" &&
+          def.fieldType !== "aircraft"
+        }
       />
-      {def.fieldType === 'airport' ||
-      def.fieldType === 'airline' ||
-      def.fieldType === 'aircraft' ? (
+      {def.fieldType === "airport" ||
+      def.fieldType === "airline" ||
+      def.fieldType === "aircraft" ? (
         <Text style={styles.fieldHint}>
           This field type requires the web app to set.
         </Text>
@@ -365,68 +382,73 @@ function ResultList<T>({
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 12, paddingBottom: 40 },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: 16,
     padding: 16,
     gap: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
   },
-  label: { fontSize: 13, fontWeight: '600', color: '#666', marginTop: 4 },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: '#111', marginBottom: 4 },
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.textSecondary,
+    marginTop: 4,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: colors.borderSubtle,
     borderRadius: 10,
     padding: 12,
     fontSize: 16,
-    color: '#111',
-    backgroundColor: '#fafafa',
+    color: colors.textPrimary,
+    backgroundColor: colors.backgroundPrimary,
   },
-  noteInput: { minHeight: 80, textAlignVertical: 'top' },
+  noteInput: { minHeight: 80, textAlignVertical: "top" },
   selected: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 12,
     borderRadius: 10,
-    backgroundColor: '#eef4ff',
+    backgroundColor: colors.backgroundSelected,
   },
-  selectedText: { fontSize: 15, color: '#111', flex: 1 },
+  selectedText: { fontSize: 15, color: colors.textPrimary, flex: 1 },
   results: {
     borderWidth: 1,
-    borderColor: '#eee',
+    borderColor: colors.divider,
     borderRadius: 10,
-    backgroundColor: '#fff',
-    overflow: 'hidden',
+    backgroundColor: colors.backgroundPrimary,
+    overflow: "hidden",
   },
   resultRow: {
     padding: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.divider,
   },
-  resultName: { fontSize: 14, color: '#333' },
+  resultName: { fontSize: 14, color: colors.textPrimary },
   field: { gap: 6, marginBottom: 8 },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: '#444' },
-  fieldHint: { fontSize: 12, color: '#999' },
+  fieldLabel: { fontSize: 13, fontWeight: "600", color: colors.textPrimary },
+  fieldHint: { fontSize: 12, color: colors.textSecondary },
   toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 6,
   },
   selectWrap: { gap: 6, marginBottom: 8 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: '#eee',
+    backgroundColor: colors.backgroundSelected,
   },
-  chipActive: { backgroundColor: '#1a73e8' },
-  chipText: { fontSize: 13, color: '#333', fontWeight: '600' },
-  chipTextActive: { color: '#fff' },
+  chipActive: { backgroundColor: colors.accent },
+  chipText: { fontSize: 13, color: colors.textPrimary, fontWeight: "600" },
+  chipTextActive: { color: "#fff" },
 });

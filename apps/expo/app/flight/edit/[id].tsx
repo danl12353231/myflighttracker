@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -8,19 +8,23 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+} from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
-import { FlightForm, type FlightFormValues } from '../../../components/FlightForm';
-import { useFlights, useUpdateFlight } from '../../../lib/api';
-import type { Flight } from '../../../lib/router';
+import {
+  FlightForm,
+  type FlightFormValues,
+} from "../../../components/FlightForm";
+import { useFlights, useUpdateFlight } from "../../../lib/api";
+import { colors } from "../../../lib/theme";
+import type { Flight } from "../../../lib/router";
 
 export default function EditFlightScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const flightId = Number(id);
-  const flights = useFlights('mine');
+  const flights = useFlights("mine");
   const updateFlight = useUpdateFlight();
   const [form, setForm] = useState<FlightFormValues | null>(null);
   const [busy, setBusy] = useState(false);
@@ -31,9 +35,9 @@ export default function EditFlightScreen() {
     if (!flight || form) return;
     setForm({
       date: flight.date,
-      flightNumber: flight.flightNumber ?? '',
-      aircraftReg: flight.aircraftReg ?? '',
-      note: flight.note ?? '',
+      flightNumber: flight.flightNumber ?? "",
+      aircraftReg: flight.aircraftReg ?? "",
+      note: flight.note ?? "",
       from: flight.from,
       to: flight.to,
       airline: flight.airline,
@@ -52,11 +56,14 @@ export default function EditFlightScreen() {
 
   const handleSave = async () => {
     if (!form.from || !form.to) {
-      Alert.alert('Missing airports', 'Choose both departure and arrival airports.');
+      Alert.alert(
+        "Missing airports",
+        "Choose both departure and arrival airports.",
+      );
       return;
     }
     if (!form.date) {
-      Alert.alert('Missing date', 'Enter a date for the flight.');
+      Alert.alert("Missing date", "Enter a date for the flight.");
       return;
     }
     setBusy(true);
@@ -86,7 +93,10 @@ export default function EditFlightScreen() {
       });
       router.back();
     } catch (e) {
-      Alert.alert('Could not update flight', e instanceof Error ? e.message : 'Unknown error');
+      Alert.alert(
+        "Could not update flight",
+        e instanceof Error ? e.message : "Unknown error",
+      );
     } finally {
       setBusy(false);
     }
@@ -95,15 +105,22 @@ export default function EditFlightScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
-          <Ionicons name="chevron-back" size={24} color="#111" />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.headerBtn}
+        >
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit flight</Text>
-        <TouchableOpacity onPress={handleSave} disabled={busy} style={styles.headerBtn}>
-          <Text style={styles.saveText}>{busy ? 'Saving…' : 'Save'}</Text>
+        <TouchableOpacity
+          onPress={handleSave}
+          disabled={busy}
+          style={styles.headerBtn}
+        >
+          <Text style={styles.saveText}>{busy ? "Saving…" : "Save"}</Text>
         </TouchableOpacity>
       </View>
       <FlightForm value={form} onChange={setForm} />
@@ -112,17 +129,17 @@ export default function EditFlightScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f7' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  container: { flex: 1, backgroundColor: colors.backgroundPrimary },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 8,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.backgroundPrimary,
   },
   headerBtn: { padding: 8 },
-  headerTitle: { fontSize: 18, fontWeight: '600' },
-  saveText: { color: '#1a73e8', fontSize: 16, fontWeight: '600' },
+  headerTitle: { fontSize: 18, fontWeight: "600", color: colors.textPrimary },
+  saveText: { color: colors.accent, fontSize: 16, fontWeight: "600" },
 });
