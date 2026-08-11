@@ -50,6 +50,9 @@ jobs:
 
       - name: Build iOS IPA
         id: eas-build
+        env:
+          EXPO_APPLE_ID: ${{ secrets.EXPO_APPLE_ID }}
+          EXPO_APPLE_PASSWORD: ${{ secrets.EXPO_APPLE_PASSWORD }}
         run: |
           eas build \
             --platform ios \

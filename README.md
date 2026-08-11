@@ -53,22 +53,28 @@ Two workflows build the mobile app on every push to `main` (or on manual
 
    ```bash
    cd apps/expo
-   bunx eas-cli init
-   bunx eas-cli login
-   bunx eas-cli build:configure   # registers iOS signing credentials (ad-hoc)
+   bunx eas-cli init --account danlah
    ```
 
    `eas init` adds `extra.eas.projectId` to `apps/expo/app.json`, which is
    committed to the repo.
 
-4. `eas build` manages Apple signing for you. The `sideload` profile in
-   `apps/expo/eas.json` uses `distribution: internal` (ad-hoc), which is what
-   you need for sideloading the IPA onto your device. EAS will prompt you to
-   register the device UDID and create an ad-hoc provisioning profile on the
-   first build.
+4. iOS signing is managed by EAS. For sideloading an IPA you need an Apple
+   Developer account (ad-hoc distribution). EAS creates the ad-hoc certificate
+   and provisioning profile automatically. In CI it runs non-interactively, so
+   provide your Apple credentials as repository secrets:
 
-Until `EXPO_TOKEN` is configured, the iOS workflow will fail at the EAS setup
-step. The Android workflow is unaffected.
+   - `EXPO_APPLE_ID` — your Apple Developer account email
+   - `EXPO_APPLE_PASSWORD` — your Apple Developer account password (or
+     an app-specific password)
+
+   Then the workflow can create credentials without prompting. You will also
+   need to register the device UDID you'll sideload onto (EAS prompts for this
+   on the first interactive run, or you can add it in the EAS dashboard).
+
+Until `EXPO_TOKEN` (and `EXPO_APPLE_ID`/`EXPO_APPLE_PASSWORD` for iOS signing)
+are configured, the iOS workflow fails at the EAS build/credentials step. The
+Android workflow is unaffected.
 
 ## Mobile app (Expo)
 
