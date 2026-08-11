@@ -77,15 +77,17 @@ script.onload = function () {
     map: map,
     route: [],
     satellite: false,
-    globe: false,
+    globe: true,
+    forceProj: false,
     airports: window.__INIT__.airports || []
   };
   window.FT = FT;
 
-  function setProjection(globe) {
+  function setProjection(globe, force) {
+    if (typeof force !== "undefined") FT.forceProj = force;
     FT.globe = globe;
-    try { map.setProjection({ type: globe ? 'globe' : 'mercator' }); } catch (e) {}
-    if (globe) {
+    try { map.setProjection({ type: FT.globe ? 'globe' : 'mercator' }); } catch (e) {}
+    if (FT.globe) {
       map.easeTo({ bearing: 0, pitch: 0, duration: 300 });
       map.dragRotate.disable();
       map.touchZoomRotate.disableRotation();
@@ -195,6 +197,20 @@ script.onload = function () {
   map.on('load', function () {
     reDrawAll();
     applyRoute(window.__INIT__.route);
+    // Start in globe mode (the FT.globe default).
+    setProjection(true);
+  });
+
+  // Auto-switch projection based on zoom level, like Google Earth.
+  map.on('zoomend', function () {
+    var z = map.getZoom();
+    var shouldGlobe = z < 3.5;
+    // If the user-forced projection already matches auto, release the force.
+    if (FT.forceProj && FT.globe === shouldGlobe) FT.forceProj = false;
+    if (FT.forceProj) return;
+    if (FT.globe !== shouldGlobe) {
+      setProjection(shouldGlobe);
+    }
   });
 
   // Layer-specific click handler for airport markers.
@@ -224,7 +240,7 @@ script.onload = function () {
       map.setStyle(styleFor(d.value));
       map.once('styledata', reDrawAll);
     } else if (d.type === 'projection') {
-      setProjection(!!d.value);
+      setProjection(!!d.value, true);
     } else if (d.type === 'airports') {
       FT.airports = d.airports || [];
       drawAirports();
