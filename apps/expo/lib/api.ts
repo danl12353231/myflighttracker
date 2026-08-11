@@ -22,14 +22,14 @@ import type {
 } from "./router";
 
 const useClient = () => {
-  const { serverUrl, token } = useAuth();
-  if (!serverUrl) throw new Error("Server not configured");
+  const { serverUrl, token, status } = useAuth();
+  if (status !== "authenticated" || !serverUrl) return null;
   return createTrpcClient(serverUrl, token);
 };
 
 export const useMe = () => {
   const { status } = useAuth();
-  const client = useClient();
+  const client = useClient()!;
   return useQuery({
     queryKey: ["me"],
     queryFn: () => client.user.me.query() as Promise<User>,
@@ -39,7 +39,7 @@ export const useMe = () => {
 
 export const useUsers = () => {
   const { status } = useAuth();
-  const client = useClient();
+  const client = useClient()!;
   return useQuery({
     queryKey: ["users"],
     queryFn: () => client.user.list.query() as Promise<User[]>,
@@ -49,7 +49,7 @@ export const useUsers = () => {
 
 export const useUpdateUser = () => {
   const queryClient = useQueryClient();
-  const client = useClient();
+  const client = useClient()!;
   return useMutation({
     mutationFn: (input: {
       id: string;
@@ -63,7 +63,7 @@ export const useUpdateUser = () => {
 
 export const useDeleteUser = () => {
   const queryClient = useQueryClient();
-  const client = useClient();
+  const client = useClient()!;
   return useMutation({
     mutationFn: (id: string) => client.user.delete.mutate(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
@@ -72,7 +72,7 @@ export const useDeleteUser = () => {
 
 export const useFlights = (scope: FlightScope = "mine", userId?: string) => {
   const { status } = useAuth();
-  const client = useClient();
+  const client = useClient()!;
   return useQuery({
     queryKey: ["flights", scope, userId],
     queryFn: () =>
@@ -83,7 +83,7 @@ export const useFlights = (scope: FlightScope = "mine", userId?: string) => {
 
 export const useUpcomingFlights = (scope: UpcomingScope = "mine") => {
   const { status } = useAuth();
-  const client = useClient();
+  const client = useClient()!;
   return useQuery({
     queryKey: ["upcoming", scope],
     queryFn: () => client.flight.upcoming.query({ scope }) as Promise<Flight[]>,
@@ -93,7 +93,7 @@ export const useUpcomingFlights = (scope: UpcomingScope = "mine") => {
 
 export const useFlightTracks = (scope: FlightScope = "mine") => {
   const { status } = useAuth();
-  const client = useClient();
+  const client = useClient()!;
   return useQuery({
     queryKey: ["flightTracks", scope],
     queryFn: () =>
@@ -104,7 +104,7 @@ export const useFlightTracks = (scope: FlightScope = "mine") => {
 
 export const useAirportSearch = (query: string, enabled: boolean) => {
   const { status } = useAuth();
-  const client = useClient();
+  const client = useClient()!;
   return useQuery({
     queryKey: ["airportSearch", query],
     queryFn: () =>
@@ -115,7 +115,7 @@ export const useAirportSearch = (query: string, enabled: boolean) => {
 
 export const useAircraftSearch = (query: string, enabled: boolean) => {
   const { status } = useAuth();
-  const client = useClient();
+  const client = useClient()!;
   return useQuery({
     queryKey: ["aircraftSearch", query],
     queryFn: () =>
@@ -126,7 +126,7 @@ export const useAircraftSearch = (query: string, enabled: boolean) => {
 
 export const useAirlineSearch = (query: string, enabled: boolean) => {
   const { status } = useAuth();
-  const client = useClient();
+  const client = useClient()!;
   return useQuery({
     queryKey: ["airlineSearch", query],
     queryFn: () =>
@@ -137,7 +137,7 @@ export const useAirlineSearch = (query: string, enabled: boolean) => {
 
 export const useVisitedCountries = () => {
   const { status } = useAuth();
-  const client = useClient();
+  const client = useClient()!;
   return useQuery({
     queryKey: ["visitedCountries"],
     queryFn: () =>
@@ -148,7 +148,7 @@ export const useVisitedCountries = () => {
 
 export const useListApiKeys = () => {
   const { status } = useAuth();
-  const client = useClient();
+  const client = useClient()!;
   return useQuery({
     queryKey: ["apiKeys"],
     queryFn: () => client.user.listApiKeys.query() as Promise<ApiKey[]>,
@@ -158,7 +158,7 @@ export const useListApiKeys = () => {
 
 export const useCreateFlight = () => {
   const queryClient = useQueryClient();
-  const client = useClient();
+  const client = useClient()!;
   return useMutation({
     mutationFn: (flight: CreateFlight) => client.flight.create.mutate(flight),
     onSuccess: () => {
@@ -172,7 +172,7 @@ export const useCreateFlight = () => {
 
 export const useUpdateFlight = () => {
   const queryClient = useQueryClient();
-  const client = useClient();
+  const client = useClient()!;
   return useMutation({
     mutationFn: (input: UpdateFlightInput) =>
       client.flight.update.mutate(input),
@@ -187,7 +187,7 @@ export const useUpdateFlight = () => {
 
 export const useDeleteFlight = () => {
   const queryClient = useQueryClient();
-  const client = useClient();
+  const client = useClient()!;
   return useMutation({
     mutationFn: (id: number) => client.flight.delete.mutate(id),
     onSuccess: () => {
@@ -201,7 +201,7 @@ export const useDeleteFlight = () => {
 
 export const useUpdatePreferences = () => {
   const queryClient = useQueryClient();
-  const client = useClient();
+  const client = useClient()!;
   return useMutation({
     mutationFn: (prefs: Preferences) =>
       client.user.updatePreferences.mutate(prefs),
@@ -211,7 +211,7 @@ export const useUpdatePreferences = () => {
 
 export const useCreateApiKey = () => {
   const queryClient = useQueryClient();
-  const client = useClient();
+  const client = useClient()!;
   return useMutation({
     mutationFn: (name: string) => client.user.createApiKey.mutate(name),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["apiKeys"] }),
@@ -220,7 +220,7 @@ export const useCreateApiKey = () => {
 
 export const useDeleteApiKey = () => {
   const queryClient = useQueryClient();
-  const client = useClient();
+  const client = useClient()!;
   return useMutation({
     mutationFn: (id: number) => client.user.deleteApiKey.mutate(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["apiKeys"] }),
@@ -229,7 +229,7 @@ export const useDeleteApiKey = () => {
 
 export const useSaveVisitedCountry = () => {
   const queryClient = useQueryClient();
-  const client = useClient();
+  const client = useClient()!;
   return useMutation({
     mutationFn: (input: {
       code: string;
@@ -243,7 +243,7 @@ export const useSaveVisitedCountry = () => {
 
 export const useImportVisitedCountries = () => {
   const queryClient = useQueryClient();
-  const client = useClient();
+  const client = useClient()!;
   return useMutation({
     mutationFn: () => client.visitedCountries.importFlights.mutate(),
     onSuccess: () =>
@@ -253,7 +253,7 @@ export const useImportVisitedCountries = () => {
 
 export const useShares = () => {
   const { status } = useAuth();
-  const client = useClient();
+  const client = useClient()!;
   return useQuery({
     queryKey: ["shares"],
     queryFn: () => client.share.list.query() as Promise<PublicShare[]>,
@@ -263,7 +263,7 @@ export const useShares = () => {
 
 export const useCreateShare = () => {
   const queryClient = useQueryClient();
-  const client = useClient();
+  const client = useClient()!;
   return useMutation({
     mutationFn: (input: ShareCreateInput) => client.share.create.mutate(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shares"] }),
@@ -272,7 +272,7 @@ export const useCreateShare = () => {
 
 export const useUpdateShare = () => {
   const queryClient = useQueryClient();
-  const client = useClient();
+  const client = useClient()!;
   return useMutation({
     mutationFn: (input: ShareUpdateInput) => client.share.update.mutate(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shares"] }),
@@ -281,7 +281,7 @@ export const useUpdateShare = () => {
 
 export const useDeleteShare = () => {
   const queryClient = useQueryClient();
-  const client = useClient();
+  const client = useClient()!;
   return useMutation({
     mutationFn: (slug: string) => client.share.delete.mutate(slug),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["shares"] }),
@@ -292,7 +292,7 @@ export const useCustomFieldDefinitions = (
   entityType: "flight" | "flight_passenger",
 ) => {
   const { status } = useAuth();
-  const client = useClient();
+  const client = useClient()!;
   return useQuery({
     queryKey: ["customFieldDefinitions", entityType],
     queryFn: () => client.customField.listDefinitions.query({ entityType }),
@@ -302,7 +302,7 @@ export const useCustomFieldDefinitions = (
 
 export const useExportJson = () => {
   const { status } = useAuth();
-  const client = useClient();
+  const client = useClient()!;
   return useQuery({
     queryKey: ["exportJson"],
     queryFn: () => client.flight.exportJson.query(),
@@ -312,7 +312,7 @@ export const useExportJson = () => {
 
 export const useExportCsv = () => {
   const { status } = useAuth();
-  const client = useClient();
+  const client = useClient()!;
   return useQuery({
     queryKey: ["exportCsv"],
     queryFn: () => client.flight.exportCsv.query(),
@@ -322,7 +322,7 @@ export const useExportCsv = () => {
 
 export const useMetar = (icao: string | null) => {
   const { status } = useAuth();
-  const client = useClient();
+  const client = useClient()!;
   return useQuery({
     queryKey: ["metar", icao],
     queryFn: () => client.weather.getMetar.query(icao!),
