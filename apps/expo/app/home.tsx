@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -13,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { MapView, type MapViewHandle } from "../components/MapView";
 import { AirportDetailsSheet } from "../components/AirportDetailsSheet";
+import { FlightDetailsSheet } from "../components/FlightDetailsSheet";
 import { StatsContent } from "../components/StatsContent";
 import { SearchSheet } from "../components/SearchSheet";
 import { useAuth } from "../lib/auth";
@@ -65,19 +65,17 @@ export default function MapHomeScreen() {
   const upcoming = useUpcomingFlights("mine");
   const friends = useUpcomingFlights("friends");
 
-  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [satellite, setSatellite] = useState(false);
   const [globe, setGlobe] = useState(false);
   const [tab, setTab] = useState<HomeTab>("mine");
   const [expanded, setExpanded] = useState(false);
   const [airportDetailsId, setAirportDetailsId] = useState<number | null>(null);
+  const [flightDetailsId, setFlightDetailsId] = useState<number | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
 
   const all = useMemo(() => allFlights.data ?? [], [allFlights.data]);
   const upcomingList = useMemo(() => upcoming.data ?? [], [upcoming.data]);
   const friendsList = useMemo(() => friends.data ?? [], [friends.data]);
-
-  // The flights shown in the dashboard depend on the active tab.
   const list = useMemo(() => {
     if (tab === "friends") return friendsList;
     if (tab === "passport") return all;
@@ -88,7 +86,6 @@ export default function MapHomeScreen() {
     tab === "mine" ? "My Flights" : tab === "friends" ? "Friends" : "Passport";
 
   const visitedAirports = useMemo(() => prepareVisitedAirports(all), [all]);
-
   const airportDetails = useMemo(
     () => visitedAirports.find((a) => a.id === airportDetailsId) ?? null,
     [visitedAirports, airportDetailsId],
@@ -101,28 +98,26 @@ export default function MapHomeScreen() {
     [all, airportDetailsId],
   );
 
-  const selected = useMemo(
-    () => all.find((f) => f.id === selectedId) ?? null,
-    [all, selectedId],
-  );
-
-  // For "mine"/"friends", auto-select the first upcoming flight so the
-  // dashboard and map show a real, current flight.
+  // Auto-select the first upcoming flight for the dashboard and map.
   const effectiveSelected = useMemo(
-    () => (tab === "passport" ? null : (selected ?? list[0] ?? null)),
-    [tab, selected, list],
+    () => (tab === "passport" ? null : (list[0] ?? null)),
+    [tab, list],
   );
 
-  const pick = useCallback((f: Flight) => {
-    setSelectedId(f.id);
-    setTimeout(() => mapRef.current?.setFlight(f), 50);
-  }, []);
-
+  // Tell the map to draw the selected route. Retry until the WebView is ready.
   useEffect(() => {
-    if (effectiveSelected && selectedId !== effectiveSelected.id) {
-      setSelectedId(effectiveSelected.id);
-    }
-  }, [effectiveSelected, selectedId]);
+    if (!effectiveSelected) return;
+    let tries = 0;
+    const maxTries = 20;
+    const trySet = () => {
+      if (tries >= maxTries) return;
+      tries++;
+      mapRef.current?.setFlight(effectiveSelected);
+      setTimeout(trySet, 250);
+    };
+    const id = setTimeout(trySet, 200);
+    return () => clearTimeout(id);
+  }, [effectiveSelected]);
 
   useEffect(() => {
     if (tab === "passport") setExpanded(true);
@@ -162,7 +157,6 @@ export default function MapHomeScreen() {
           ref={mapRef}
           flights={all}
           airports={visitedAirports}
-          selectedId={effectiveSelected ? effectiveSelected.id : null}
           onAirportTap={(id) => setAirportDetailsId(id)}
         />
       </View>
@@ -256,7 +250,12 @@ export default function MapHomeScreen() {
           </View>
         ) : (
           <View style={styles.listWrap}>
-            <View style={styles.summaryRow}>
+            <Pressable
+              style={styles.summaryRow}
+              onPress={() => {
+                if (effectiveSelected) setFlightDetailsId(effectiveSelected.id);
+              }}
+            >
               {/* Remaining time */}
               <View style={styles.remaining}>
                 <Text style={styles.remainingH}>{remainingLabel.hours}</Text>
@@ -337,41 +336,11 @@ export default function MapHomeScreen() {
                   {statusInfo.state}
                 </Text>
               </View>
-            </View>
+            </Pressable>
 
-            {/* Flight list */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.flightListScroll}
-            >
-              <View style={styles.flightList}>
-                {list.map((f) => (
-                  <Pressable
-                    key={f.id}
-                    style={[
-                      styles.flightChip,
-                      selectedId === f.id && styles.flightChipActive,
-                    ]}
-                    onPress={() => pick(f)}
-                  >
-                    <Text style={styles.flightChipMain}>
-                      {codeOf(f, "from")} → {codeOf(f, "to")}
-                    </Text>
-                    <Text style={styles.flightChipSub}>
-                      {f.flightNumber ?? (airlineOf(f) || "Flight")} · {f.date}
-                    </Text>
-                  </Pressable>
-                ))}
-                {list.length === 0 ? (
-                  <Text style={styles.empty}>
-                    {allFlights.isLoading
-                      ? "Loading flights…"
-                      : "No upcoming flights yet."}
-                  </Text>
-                ) : null}
-              </View>
-            </ScrollView>
+            {list.length === 0 && !allFlights.isLoading ? (
+              <Text style={styles.empty}>No upcoming flights yet.</Text>
+            ) : null}
           </View>
         )}
 
@@ -413,9 +382,17 @@ export default function MapHomeScreen() {
         onClose={() => setAirportDetailsId(null)}
         onShowFlight={(id) => {
           setAirportDetailsId(null);
+          setFlightDetailsId(id);
           const f = all.find((x) => x.id === id);
-          if (f) pick(f);
+          if (f) mapRef.current?.setFlight(f);
         }}
+      />
+
+      <FlightDetailsSheet
+        visible={!!flightDetailsId}
+        flightId={flightDetailsId}
+        onClose={() => setFlightDetailsId(null)}
+        onEdit={(id) => router.push(`/flight/edit/${id}`)}
       />
 
       <SearchSheet
@@ -423,7 +400,8 @@ export default function MapHomeScreen() {
         onClose={() => setSearchOpen(false)}
         onSelectFlight={(f) => {
           setSearchOpen(false);
-          pick(f);
+          mapRef.current?.setFlight(f);
+          setFlightDetailsId(f.id);
         }}
       />
     </View>

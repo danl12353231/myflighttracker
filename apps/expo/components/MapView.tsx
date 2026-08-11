@@ -251,24 +251,17 @@ export const MapView = forwardRef<
   {
     flights: Flight[];
     airports: VisitedAirport[];
-    selectedId: number | null;
     onAirportTap?: (id: number) => void;
   }
->(function MapView({ flights, airports, selectedId, onAirportTap }, ref) {
+>(function MapView({ flights, airports, onAirportTap }, ref) {
   const webRef = useRef<any>(null);
 
+  // Only rebuild the WebView when flight/airport data truly changes (first load).
+  // Route updates use the imperative setFlight postMessage exclusively.
   const html = useMemo(() => {
-    const selected = flights.find((f) => f.id === selectedId) ?? null;
-    const route =
-      selected?.from && selected?.to
-        ? buildRoute(
-            [selected.from.lon, selected.from.lat],
-            [selected.to.lon, selected.to.lat],
-          )
-        : [];
     const secondary = flights
-      .filter((f) => f.id !== selectedId && f.from && f.to)
-      .slice(0, 12)
+      .filter((f) => f.from && f.to)
+      .slice(0, 30)
       .map(
         (f) =>
           [
@@ -282,8 +275,8 @@ export const MapView = forwardRef<
       lon: a.lon,
       lat: a.lat,
     }));
-    return buildHtml({ route, secondary, airports: markers });
-  }, [flights, airports, selectedId]);
+    return buildHtml({ route: [], secondary, airports: markers });
+  }, [flights, airports]);
 
   useImperativeHandle(ref, () => ({
     setFlight(flight) {
