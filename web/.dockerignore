@@ -1,0 +1,13 @@
+**
+!/docker/**
+!/static/**
+/static/showcase/**
+!/src/**
+!/prisma/**
+!/temp/**
+!/package.json
+!/bun.lock
+!/svelte.config.js
+!/vite.config.ts
+!/tailwind.config.js
+!/postcss.config.mjs

@@ -1,0 +1,221 @@
+<script lang="ts">
+  import { LoaderCircle } from '@o7/icon/lucide';
+  import { onMount } from 'svelte';
+  import { toast } from 'svelte-sonner';
+  import { superForm } from 'sveltekit-superforms';
+  import { zod4 as zod } from 'sveltekit-superforms/adapters';
+
+  import type { PageProps } from './$types';
+
+  import { goto } from '$app/navigation';
+  import { page } from '$app/state';
+  import * as Alert from '$lib/components/ui/alert';
+  import { Button } from '$lib/components/ui/button';
+  import * as Form from '$lib/components/ui/form';
+  import { Globe } from '$lib/components/ui/globe';
+  import { Input, PasswordInput } from '$lib/components/ui/input';
+  import { AcrobaticLoader } from '$lib/components/ui/loader';
+  import { api } from '$lib/trpc';
+  import { isOAuthCallback } from '$lib/utils';
+  import { isLargeScreen } from '$lib/utils/size';
+  import { signInSchema } from '$lib/zod/auth';
+
+  const { data }: PageProps = $props();
+  const isSetup = data.isSetup;
+  let appConfig = $state(data.appConfig);
+
+  let oauthLoading = $state(true);
+  let autoLoggingIn = $state(false);
+  let oauthLinkRequired = $state(false);
+
+  onMount(async () => {
+    if (!isSetup) {
+      await goto('/setup');
+      return;
+    }
+
+    if (!appConfig) {
+      oauthLoading = false;
+      return;
+    }
+
+    if (!appConfig.oauth.enabled) {
+      oauthLoading = false;
+      appConfig.oauth.autoLogin = false;
+      return;
+    }
+
+    if (isOAuthCallback(page.url.search)) {
+      oauthLoading = true;
+      const resp = await fetch('/api/oauth/callback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: window.location.toString() }),
+      });
+
+      if (!resp.ok) {
+        const err: {
+          code?: string;
+          username?: string;
+          linkToken?: string;
+          message?: string;
+        } = await resp.json();
+        if (
+          resp.status === 409 &&
+          err.code === 'oauth_link_required' &&
+          err.username &&
+          err.linkToken
+        ) {
+          $formData.username = err.username;
+          $formData.oauthLinkToken = err.linkToken;
+          oauthLinkRequired = true;
+          oauthLoading = false;
+          window.history.replaceState({}, '', '/login');
+          return;
+        }
+
+        await goto('/login', { replaceState: true }); // clear potential query params
+        toast.error(err.message ?? 'OAuth login failed');
+        oauthLoading = false;
+        return;
+      }
+
+      await goto('/', { invalidateAll: true });
+      return;
+    }
+
+    if (
+      appConfig.oauth.autoLogin &&
+      !window.location.search.includes('autoLogin=false')
+    ) {
+      autoLoggingIn = true;
+      await goto('/login?autoLogin=false', { replaceState: true });
+      await oauthLogin();
+      return;
+    }
+
+    oauthLoading = false;
+  });
+
+  const form = superForm(data.form, {
+    validators: zod(signInSchema),
+    onUpdated({ form }) {
+      if (form.message) {
+        toast.error(form.message.text);
+      }
+    },
+  });
+  const { form: formData, enhance, submitting } = form;
+
+  const oauthLogin = async () => {
+    oauthLoading = true;
+    const redirect = window.location.toString().split('?')[0];
+    if (!redirect) return;
+
+    try {
+      const resp = await api.oauth.authorize.mutate(redirect);
+      window.location.href = resp.url;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'OAuth login failed');
+      oauthLoading = false;
+    }
+  };
+
+  let showLoader = $derived.by(() => {
+    if (oauthLinkRequired) return false;
+
+    return (
+      (autoLoggingIn || !page.url.search.includes('autoLogin=false')) &&
+      (!appConfig ||
+        appConfig.oauth.autoLogin ||
+        isOAuthCallback(page.url.search))
+    );
+  });
+</script>
+
+{#if !showLoader}
+  <div class="grid h-full lg:grid-cols-2">
+    <div class="flex items-center justify-center overflow-y-auto py-8">
+      <div class="mx-auto grid w-[350px] max-w-full gap-6 px-4">
+        <div class="grid gap-2 text-center">
+          <h1 class="text-3xl font-bold">Login</h1>
+          <p class="text-muted-foreground text-balance">
+            {#if !appConfig?.oauth.enabled}
+              Welcome back! Enter your username and password to login
+            {:else}
+              Welcome back! Login below
+            {/if}
+          </p>
+        </div>
+        {#if oauthLinkRequired || !(appConfig?.oauth.enabled && appConfig.oauth.hidePasswordForm)}
+          {#if oauthLinkRequired}
+            <Alert.Root variant="info">
+              <Alert.Description>
+                Log in with your AirTrail password to link this OAuth account.
+              </Alert.Description>
+            </Alert.Root>
+          {/if}
+          <form
+            use:enhance
+            action="/api/users/login"
+            method="POST"
+            class="grid gap-4"
+          >
+            <input
+              type="hidden"
+              name="oauthLinkToken"
+              value={$formData.oauthLinkToken ?? ''}
+            />
+            <Form.Field {form} name="username">
+              <Form.Control>
+                {#snippet children({ props })}
+                  <Form.Label>Username</Form.Label>
+                  <Input {...props} bind:value={$formData.username} />
+                {/snippet}
+              </Form.Control>
+              <Form.FieldErrors />
+            </Form.Field>
+            <Form.Field {form} name="password">
+              <Form.Control>
+                {#snippet children({ props })}
+                  <Form.Label>Password</Form.Label>
+                  <PasswordInput {...props} bind:value={$formData.password} />
+                {/snippet}
+              </Form.Control>
+              <Form.FieldErrors />
+            </Form.Field>
+            <Form.Button disabled={$submitting || oauthLoading}>
+              {#if $submitting}
+                <LoaderCircle class="animate-spin mr-1" size="18" />
+              {/if}
+              Log in
+            </Form.Button>
+          </form>
+        {/if}
+        {#if appConfig?.oauth.enabled && !oauthLinkRequired}
+          <Button
+            onclick={oauthLogin}
+            disabled={oauthLoading}
+            variant="outline"
+          >
+            {#if oauthLoading}
+              <LoaderCircle class="animate-spin mr-1" size={16} />
+            {/if}
+            {appConfig.oauth.buttonText}
+          </Button>
+        {/if}
+      </div>
+    </div>
+    {#if $isLargeScreen}
+      <div class="relative flex min-h-0 items-center justify-center p-8">
+        <Globe />
+      </div>
+    {/if}
+  </div>
+{:else}
+  <div class="h-full flex items-center justify-center">
+    <AcrobaticLoader />
+  </div>
+{/if}

@@ -1,0 +1,552 @@
+<script lang="ts">
+  import type { TZDate } from '@date-fns/tz';
+  import { differenceInSeconds } from 'date-fns';
+  import { type DateValue, parseDate, Time } from '@internationalized/date';
+  import { CalendarDays } from '@o7/icon/lucide';
+  import { DateField } from 'bits-ui';
+  import type { SuperForm } from 'sveltekit-superforms';
+  import { z } from 'zod';
+
+  import { page } from '$app/state';
+  import { Calendar } from '$lib/components/ui/calendar';
+  import * as Form from '$lib/components/ui/form';
+  import * as Popover from '$lib/components/ui/popover';
+  import { TimeInput } from '$lib/components/ui/time-input';
+  import { cn } from '$lib/utils';
+  import { dateValueFromISO, mergeTimeWithDate } from '$lib/utils/datetime';
+  import { formatTimeValue, parseTimeValue } from '$lib/utils/datetime/time';
+  import {
+    formatTime as formatTimeWithPrefs,
+    getPreferences,
+    pairToDisplay,
+    pairToStorage,
+    resolveDateLocale,
+    resolveFlightEditTimeZone,
+    resolveTimeLocale,
+  } from '$lib/utils/preferences';
+  import type { flightSchema } from '$lib/zod/flight';
+
+  type FlightFormData = z.infer<typeof flightSchema>;
+  type DateFieldKey =
+    | 'departure'
+    | 'arrival'
+    | 'departureScheduled'
+    | 'arrivalScheduled'
+    | 'takeoffScheduled'
+    | 'takeoffActual'
+    | 'landingScheduled'
+    | 'landingActual';
+  type TimeFieldKey =
+    | 'departureTime'
+    | 'arrivalTime'
+    | 'departureScheduledTime'
+    | 'arrivalScheduledTime'
+    | 'takeoffScheduledTime'
+    | 'takeoffActualTime'
+    | 'landingScheduledTime'
+    | 'landingActualTime';
+
+  let {
+    form,
+    dateField,
+    timeField,
+    label,
+    timezone,
+    baseDateTime = null,
+    compareDateTime = null,
+    defaultDate = null,
+    defaultTime = null,
+    placeholder = 'Add time',
+    disabled = false,
+  }: {
+    form: SuperForm<FlightFormData>;
+    dateField: DateFieldKey;
+    timeField: TimeFieldKey;
+    label: string;
+    timezone?: string | null;
+    baseDateTime?: TZDate | null;
+    compareDateTime?: TZDate | null;
+    defaultDate?: string | null;
+    defaultTime?: string | null;
+    placeholder?: string;
+    disabled?: boolean;
+  } = $props();
+
+  const { form: formData, validate } = form;
+  const fallbackTimezone =
+    typeof Intl !== 'undefined'
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : 'UTC';
+
+  const prefs = $derived(getPreferences(page.data.user));
+  const airportTz = $derived(timezone ?? fallbackTimezone);
+  const editTz = $derived(resolveFlightEditTimeZone(prefs, airportTz));
+  const editLocale = $derived(resolveTimeLocale(prefs));
+  const dateLocale = $derived(resolveDateLocale(prefs));
+
+  const getStored = (field: DateFieldKey | TimeFieldKey): string | null =>
+    (($formData as any)[field] as string | null) ?? null;
+
+  // editTz-local view of this cell's stored pair. The whole cell operates
+  // on these display values; conversion happens at the storage boundary.
+  const display = (): { date: string | null; time: string | null } =>
+    pairToDisplay(
+      getStored(dateField),
+      getStored(timeField),
+      airportTz,
+      editTz,
+    );
+  const getValue = (field: DateFieldKey | TimeFieldKey): string | null => {
+    const d = display();
+    return field === dateField ? d.date : d.time;
+  };
+
+  const setValue = (
+    field: DateFieldKey | TimeFieldKey,
+    value: string | null,
+  ) => {
+    const otherDate = field === dateField ? value : getValue(dateField);
+    const otherTime = field === timeField ? value : getValue(timeField);
+    if (!otherDate || !otherTime) {
+      formData.update((current) => ({ ...current, [field]: value }));
+      return;
+    }
+    const r = pairToStorage(otherDate, otherTime, editTz, airportTz);
+    formData.update((current) => ({
+      ...current,
+      [dateField]: r.date,
+      [timeField]: r.time,
+    }));
+  };
+
+  // `defaultDate` / `defaultTime` arrive in airport-local storage form from
+  // the parent; surface them in the same editTz space as the rest of the cell.
+  const defaultPair = $derived(
+    pairToDisplay(defaultDate, defaultTime, airportTz, editTz),
+  );
+
+  const applyDefaultDate = () => {
+    if (dateValue) return;
+    const fallback = defaultPair.date;
+    if (fallback) {
+      const fallbackDate = dateValueFromISO(fallback);
+      dateValue = fallbackDate;
+      setValue(dateField, fallbackDate.toDate('UTC').toISOString());
+      validateField(dateField);
+    }
+  };
+
+  const applyDefaultDateTime = () => {
+    if (!dateValue) {
+      const fallback = defaultPair.date;
+      if (fallback) {
+        const fallbackDate = dateValueFromISO(fallback);
+        dateValue = fallbackDate;
+        setValue(dateField, fallbackDate.toDate('UTC').toISOString());
+        validateField(dateField);
+      }
+    }
+
+    if (!timeValue) {
+      const fallbackTime = defaultPair.time;
+      if (fallbackTime) {
+        const parsed = parseTimeValue(fallbackTime);
+        if (parsed) {
+          timeValue = parsed;
+          setValue(timeField, formatTimeValue(parsed));
+          validateField(timeField);
+        }
+      }
+    }
+  };
+
+  const validateField = (field: DateFieldKey | TimeFieldKey) => {
+    validate(field as any);
+  };
+
+  const getDateTime = (
+    date: string | null,
+    time: string | null,
+    tzId?: string | null,
+  ) => {
+    if (!date || !time) return null;
+    const tz = tzId ?? fallbackTimezone;
+    try {
+      return mergeTimeWithDate(date, time, tz);
+    } catch {
+      return null;
+    }
+  };
+
+  const getDateString = (value: DateValue) => {
+    return value.toDate('UTC').toISOString().slice(0, 10);
+  };
+
+  const isTouchDevice = $derived.by(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia?.('(pointer: coarse)').matches ?? false;
+  });
+
+  let open = $state(false);
+  let calendarOpen = $state(false);
+  let nativeInput = $state<HTMLInputElement | null>(null);
+
+  let dateValue: DateValue | undefined = $state(
+    getValue(dateField) ? dateValueFromISO(getValue(dateField)!) : undefined,
+  );
+  let timeValue: Time | undefined = $state(
+    getValue(timeField) ? parseTimeValue(getValue(timeField)!) : undefined,
+  );
+
+  const clearTimeValue = () => {
+    if (!timeValue && !getValue(timeField)) return;
+    timeValue = undefined;
+    setValue(timeField, null);
+    validateField(timeField);
+  };
+
+  $effect(() => {
+    const dateString = getValue(dateField);
+    if (dateString) {
+      const date = dateValueFromISO(dateString);
+      if (!dateValue || date.compare(dateValue) !== 0) {
+        dateValue = date;
+      }
+    } else {
+      dateValue = undefined;
+    }
+  });
+
+  $effect(() => {
+    const timeString = getValue(timeField);
+    if (timeString) {
+      const parsed = parseTimeValue(timeString);
+      if (!parsed) {
+        timeValue = undefined;
+        return;
+      }
+      if (
+        !timeValue ||
+        parsed.hour !== timeValue.hour ||
+        parsed.minute !== timeValue.minute
+      ) {
+        timeValue = parsed;
+      }
+    } else {
+      timeValue = undefined;
+    }
+  });
+
+  // TZDate built in editTz so its intrinsic tz formats correctly. Display
+  // values are interpreted as editTz-local.
+  const currentDateTime = $derived.by(() =>
+    getDateTime(getValue(dateField), getValue(timeField), editTz),
+  );
+
+  const displayTime = $derived.by(() => {
+    if (currentDateTime) {
+      return formatTimeWithPrefs(currentDateTime, prefs, editTz);
+    }
+    if (timeValue) {
+      return formatTimeValue(timeValue);
+    }
+    return null;
+  });
+
+  // Calendar-day offset evaluated in editTz so the "+1"/"-1" badge matches
+  // what the user sees in the field.
+  const dayOffset = $derived.by(() => {
+    if (!currentDateTime || !baseDateTime) return 0;
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: editTz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const ymdToUtc = (d: Date) => Date.parse(`${fmt.format(d)}T00:00:00Z`);
+    const days = Math.round(
+      (ymdToUtc(currentDateTime) - ymdToUtc(baseDateTime)) / 86_400_000,
+    );
+    return Number.isFinite(days) ? days : 0;
+  });
+
+  const offsetLabel = $derived.by(() => {
+    if (!dayOffset) return null;
+    return `${dayOffset > 0 ? '+' : ''}${dayOffset}`;
+  });
+
+  const timingStatus = $derived.by(() => {
+    if (!compareDateTime || !currentDateTime) return null;
+    const diff = differenceInSeconds(currentDateTime, compareDateTime);
+    if (diff === 0) return 'on-time';
+    return diff < 0 ? 'early' : 'late';
+  });
+
+  const timingClass = $derived.by(() => {
+    if (timingStatus === 'early')
+      return 'text-emerald-600 dark:text-emerald-500';
+    if (timingStatus === 'late') return 'text-rose-600 dark:text-rose-500';
+    return '';
+  });
+
+  const nativeValue = $derived.by(() => {
+    if (!dateValue || !timeValue) return '';
+    return `${getDateString(dateValue)}T${formatTimeValue(timeValue)}`;
+  });
+
+  const handleNativeChange = (value: string) => {
+    if (!value) {
+      dateValue = undefined;
+      timeValue = undefined;
+      setValue(dateField, null);
+      setValue(timeField, null);
+      validateField(dateField);
+      validateField(timeField);
+      return;
+    }
+
+    const [datePart, timePart] = value.split('T');
+    if (datePart) {
+      const parsedDate = parseDate(datePart);
+      dateValue = parsedDate;
+      setValue(dateField, parsedDate.toDate('UTC').toISOString());
+      validateField(dateField);
+    }
+
+    if (timePart) {
+      const timeString = timePart.slice(0, 5);
+      timeValue = parseTimeValue(timeString);
+      setValue(timeField, timeString);
+      validateField(timeField);
+    }
+  };
+
+  const handleNativePointerDown = () => {
+    if (!displayTime) {
+      applyDefaultDateTime();
+      // Sync value immediately so the native picker shows the defaults
+      if (nativeInput && dateValue && timeValue) {
+        nativeInput.value = `${getDateString(dateValue)}T${formatTimeValue(timeValue)}`;
+      }
+    }
+  };
+
+  const handleTriggerClick = (
+    event: MouseEvent,
+    openPopover?: (event: MouseEvent) => void,
+  ) => {
+    if (!displayTime) {
+      applyDefaultDateTime();
+    }
+    openPopover?.(event);
+  };
+</script>
+
+<div class="">
+  <Form.Field {form} name={dateField as any}>
+    <Form.Control>
+      {#snippet children({ props })}
+        <div class="relative">
+          <Popover.Root bind:open>
+            <Popover.Trigger>
+              {#snippet child({ props })}
+                <button
+                  {...props}
+                  type="button"
+                  class={cn(
+                    'group flex h-8 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-2 text-sm font-medium shadow-xs transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] hover:bg-border dark:bg-input/30 dark:hover:bg-input/50',
+                    'hover:border-border focus-visible:outline-hidden',
+                    disabled && 'cursor-not-allowed opacity-60',
+                  )}
+                  {disabled}
+                  onclick={(event) =>
+                    handleTriggerClick(
+                      event,
+                      (props as { onclick?: (event: MouseEvent) => void })
+                        .onclick,
+                    )}
+                >
+                  <span
+                    class={cn(
+                      'flex items-baseline gap-1.5 truncate',
+                      !displayTime &&
+                        'text-muted-foreground text-xs font-medium',
+                      timingClass,
+                    )}
+                  >
+                    <span>{displayTime ?? placeholder}</span>
+                    {#if offsetLabel}
+                      <span
+                        class="text-[10px] font-semibold text-muted-foreground"
+                      >
+                        {offsetLabel}
+                      </span>
+                    {/if}
+                  </span>
+                  <CalendarDays
+                    size={14}
+                    class="text-muted-foreground transition group-hover:text-foreground"
+                  />
+                </button>
+              {/snippet}
+            </Popover.Trigger>
+            <Popover.Content class="w-72 p-3" align="start">
+              <div class="grid gap-3">
+                <div class="grid gap-1.5">
+                  <span class="text-xs font-semibold text-muted-foreground">
+                    {label} date
+                  </span>
+                  <DateField.Root
+                    bind:value={
+                      () => dateValue,
+                      (v) => {
+                        if (v === undefined) {
+                          dateValue = undefined;
+                          setValue(dateField, null);
+                          validateField(dateField);
+                          return;
+                        }
+                        dateValue = v;
+                        setValue(
+                          dateField,
+                          dateValue.toDate('UTC').toISOString(),
+                        );
+                        validateField(dateField);
+                      }
+                    }
+                    granularity="day"
+                    minValue={parseDate('1970-01-01')}
+                    locale={dateLocale}
+                  >
+                    <div class="flex w-full flex-col gap-1.5">
+                      <DateField.Input
+                        class={cn(
+                          'border-input bg-background selection:bg-primary dark:bg-input/30 selection:text-primary-foreground ring-offset-background placeholder:text-muted-foreground shadow-xs flex h-9 w-full min-w-0 rounded-md border px-3 py-[6px] text-base outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
+                          'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
+                          'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
+                        )}
+                      >
+                        {#snippet children({ segments })}
+                          {#each segments as { part, value }}
+                            <div class="inline-block select-none">
+                              {#if part === 'literal'}
+                                <DateField.Segment
+                                  {part}
+                                  class="text-muted-foreground"
+                                >
+                                  {value}
+                                </DateField.Segment>
+                              {:else}
+                                <DateField.Segment
+                                  {part}
+                                  class="rounded-md px-1 hover:bg-muted focus:bg-muted focus:text-foreground focus-visible:ring-0! focus-visible:ring-offset-0! aria-[valuetext=Empty]:text-muted-foreground"
+                                >
+                                  {value}
+                                </DateField.Segment>
+                              {/if}
+                            </div>
+                          {/each}
+                          <Popover.Root bind:open={calendarOpen}>
+                            <Popover.Trigger
+                              {...props}
+                              class="ml-auto inline-flex items-center justify-center text-muted-foreground transition-all hover:text-foreground active:text-foreground"
+                            >
+                              <CalendarDays size={16} />
+                            </Popover.Trigger>
+                            <Popover.Content class="p-0">
+                              <Calendar
+                                type="single"
+                                value={dateValue}
+                                onValueChange={(v) => {
+                                  if (v === undefined) {
+                                    dateValue = undefined;
+                                    setValue(dateField, null);
+                                    validateField(dateField);
+                                    return;
+                                  }
+                                  dateValue = v;
+                                  setValue(
+                                    dateField,
+                                    dateValue?.toDate('UTC').toISOString() ??
+                                      null,
+                                  );
+                                  validateField(dateField);
+                                  calendarOpen = false;
+                                }}
+                              />
+                            </Popover.Content>
+                          </Popover.Root>
+                        {/snippet}
+                      </DateField.Input>
+                    </div>
+                  </DateField.Root>
+                </div>
+                <div class="grid gap-1.5">
+                  <span class="text-xs font-semibold text-muted-foreground">
+                    {label} time
+                  </span>
+                  <TimeInput
+                    bind:value={
+                      () => timeValue,
+                      (value) => {
+                        if (!value) {
+                          clearTimeValue();
+                          return;
+                        }
+
+                        applyDefaultDate();
+                        timeValue = value;
+                        setValue(timeField, formatTimeValue(value));
+                        validateField(timeField);
+                      }
+                    }
+                    locale={editLocale}
+                    class={cn(
+                      'border-input bg-background selection:bg-primary dark:bg-input/30 selection:text-primary-foreground ring-offset-background placeholder:text-muted-foreground shadow-xs flex h-9 w-full min-w-0 rounded-md border px-3 py-[6px] text-base outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
+                      'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
+                      'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
+                    )}
+                  />
+                </div>
+              </div>
+            </Popover.Content>
+          </Popover.Root>
+          <input
+            hidden
+            bind:value={$formData[dateField as keyof FlightFormData]}
+            name={props.name}
+          />
+          <input
+            bind:this={nativeInput}
+            type="datetime-local"
+            class={cn(
+              'absolute inset-0 z-10 h-full w-full opacity-0',
+              isTouchDevice ? 'cursor-pointer' : 'pointer-events-none',
+            )}
+            tabindex={-1}
+            value={nativeValue}
+            {disabled}
+            onpointerdown={handleNativePointerDown}
+            onchange={(event) =>
+              handleNativeChange(
+                (event.currentTarget as HTMLInputElement).value,
+              )}
+          />
+        </div>
+      {/snippet}
+    </Form.Control>
+    <Form.FieldErrors class="text-xs" />
+  </Form.Field>
+  <Form.Field {form} name={timeField as any}>
+    <Form.Control>
+      {#snippet children({ props })}
+        <input
+          hidden
+          bind:value={$formData[timeField as keyof FlightFormData]}
+          name={props.name}
+        />
+      {/snippet}
+    </Form.Control>
+    <Form.FieldErrors class="text-xs" />
+  </Form.Field>
+</div>

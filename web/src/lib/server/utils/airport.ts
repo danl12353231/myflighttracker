@@ -1,0 +1,110 @@
+import { z } from 'zod';
+
+import { db } from '$lib/db';
+import { findAirportsPrimitive } from '$lib/db/queries';
+import type { Airport, CreateAirport } from '$lib/db/types';
+import type { ErrorActionResult } from '$lib/utils/forms';
+import type { airportSchema } from '$lib/zod/airport';
+
+export const getAirport = async (input: number): Promise<Airport | null> => {
+  return (
+    (await db
+      .selectFrom('airport')
+      .selectAll()
+      .where('id', 'ilike', input)
+      .executeTakeFirst()) ?? null
+  );
+};
+
+export const getAirportByIcao = async (
+  input: string,
+): Promise<Airport | null> => {
+  return (
+    (await db
+      .selectFrom('airport')
+      .selectAll()
+      .where('icao', 'ilike', input)
+      .executeTakeFirst()) ?? null
+  );
+};
+
+export const getAirportByIata = async (
+  input: string,
+): Promise<Airport | null> => {
+  return (
+    (await db
+      .selectFrom('airport')
+      .selectAll()
+      .where('iata', 'ilike', input)
+      .executeTakeFirst()) ?? null
+  );
+};
+
+export const findAirports = async (input: string): Promise<Airport[]> => {
+  return await findAirportsPrimitive(db, input);
+};
+
+export const createAirport = async (data: CreateAirport) => {
+  await db.insertInto('airport').values(data).execute();
+};
+
+export const updateAirport = async (data: Airport) => {
+  await db.updateTable('airport').set(data).where('id', '=', data.id).execute();
+};
+
+export const validateAndSaveAirport = async (
+  data: z.infer<typeof airportSchema>,
+): Promise<ErrorActionResult> => {
+  const pathError = (path: string, message: string) => {
+    return { success: false, type: 'path', path, message } as const;
+  };
+
+  const airport = {
+    ...data,
+    iata: data.iata || null,
+    municipality: data.municipality || null,
+    custom: true,
+  };
+
+  const existingAirport = await getAirportByIcao(airport.icao);
+  if (existingAirport && !existingAirport.custom) {
+    return pathError('icao', 'Code already used');
+  }
+
+  if (existingAirport) {
+    try {
+      await updateAirport({
+        ...existingAirport,
+        ...airport,
+        id: existingAirport.id,
+      });
+    } catch (_) {
+      return {
+        success: false,
+        type: 'error',
+        message: 'Failed to update airport',
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Airport updated',
+    };
+  } else {
+    try {
+      const { id: _, ...airportWithoutId } = airport;
+      await createAirport(airportWithoutId);
+    } catch {
+      return {
+        success: false,
+        type: 'error',
+        message: 'Failed to create airport',
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Airport created',
+    };
+  }
+};

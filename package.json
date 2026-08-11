@@ -1,0 +1,6 @@
+{
+  "name": "myflighttracker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "myFlightTracker — self-hosted flight tracker with a web app and iOS/Android mobile app"
+}

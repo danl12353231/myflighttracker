@@ -1,0 +1,26 @@
+<script lang="ts">
+  import { Search } from '@o7/icon/lucide';
+  import { Command as CommandPrimitive } from 'bits-ui';
+
+  import { cn } from '$lib/utils';
+
+  let {
+    ref = $bindable(null),
+    class: className,
+    value = $bindable(''),
+    ...restProps
+  }: CommandPrimitive.InputProps = $props();
+</script>
+
+<div class="flex items-center border-b px-2" data-command-input-wrapper="">
+  <Search size={16} class="mr-2 shrink-0 opacity-50" />
+  <CommandPrimitive.Input
+    class={cn(
+      'placeholder:text-muted-foreground flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50',
+      className,
+    )}
+    bind:ref
+    {...restProps}
+    bind:value
+  />
+</div>

@@ -1,0 +1,11 @@
+{
+  "pages": [
+    "overview",
+    "install",
+    "features",
+    "integrations",
+    "administration",
+    "api",
+    "development"
+  ]
+}

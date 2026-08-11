@@ -1,0 +1,54 @@
+import { z } from 'zod';
+
+import { db } from '$lib/db';
+import { adminProcedure, authedProcedure, router } from '$lib/server/trpc';
+import {
+  getAirline,
+  getAirlineByIcao,
+  getAirlineByName,
+} from '$lib/server/utils/airline';
+import { syncAirlines, syncAirlineIcons } from '$lib/server/utils/sync';
+
+export const airlineRouter = router({
+  get: authedProcedure.input(z.number()).query(async ({ input }) => {
+    return await getAirline(input);
+  }),
+  getByIcao: authedProcedure.input(z.string()).query(async ({ input }) => {
+    return await getAirlineByIcao(input);
+  }),
+  getByIata: authedProcedure.input(z.string()).query(async ({ input }) => {
+    return await db
+      .selectFrom('airline')
+      .selectAll()
+      .where('iata', 'ilike', input)
+      .executeTakeFirst();
+  }),
+  getByName: authedProcedure.input(z.string()).query(async ({ input }) => {
+    return await getAirlineByName(input);
+  }),
+  list: authedProcedure.query(async () => {
+    return await db.selectFrom('airline').selectAll().orderBy('name').execute();
+  }),
+  delete: adminProcedure.input(z.number()).mutation(async ({ input }) => {
+    const result = await db
+      .deleteFrom('airline')
+      .where('id', '=', input)
+      .execute();
+    return result.length > 0;
+  }),
+  sync: adminProcedure
+    .input(
+      z.object({
+        overwrite: z.boolean().optional(),
+        includeDefunct: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      return await syncAirlines(input);
+    }),
+  syncIcons: adminProcedure
+    .input(z.object({ overwrite: z.boolean().optional() }))
+    .mutation(async ({ input }) => {
+      return await syncAirlineIcons(input);
+    }),
+});

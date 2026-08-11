@@ -1,0 +1,290 @@
+import type { ColumnType } from "kysely";
+export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S, I | undefined, U>
+  : ColumnType<T, T | undefined, T>;
+export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+
+export type aircraft = {
+    id: Generated<number>;
+    /**
+     * ICAO aircraft type code
+     */
+    name: string;
+    icao: string | null;
+    sourceId: string | null;
+};
+export type airline = {
+    id: Generated<number>;
+    name: string;
+    icao: string | null;
+    iata: string | null;
+    iconPath: string | null;
+    sourceId: string | null;
+};
+export type airport = {
+    id: Generated<number>;
+    icao: string;
+    iata: string | null;
+    lat: number;
+    lon: number;
+    tz: string;
+    name: string;
+    municipality: string | null;
+    /**
+     * @kyselyType('large_airport' | 'medium_airport' | 'small_airport' | 'heliport' | 'seaplane_base' | 'balloonport' | 'closed')
+     */
+    type: 'large_airport' | 'medium_airport' | 'small_airport' | 'heliport' | 'seaplane_base' | 'balloonport' | 'closed';
+    /**
+     * @kyselyType('EU' | 'NA' | 'SA' | 'AS' | 'AF' | 'OC' | 'AN')
+     */
+    continent: 'EU' | 'NA' | 'SA' | 'AS' | 'AF' | 'OC' | 'AN';
+    country: string;
+    custom: Generated<boolean>;
+};
+export type api_key = {
+    id: Generated<number>;
+    name: string;
+    userId: string;
+    key: string;
+    createdAt: Generated<Timestamp>;
+    lastUsed: Timestamp | null;
+};
+export type app_config = {
+    id: Generated<number>;
+    config: Generated<unknown>;
+};
+export type custom_field_definition = {
+    id: Generated<number>;
+    /**
+     * @kyselyType('flight' | 'flight_passenger')
+     */
+    entityType: 'flight' | 'flight_passenger';
+    key: string;
+    label: string;
+    description: string | null;
+    /**
+     * @kyselyType('text' | 'textarea' | 'number' | 'boolean' | 'date' | 'select' | 'multi-select' | 'airport' | 'airline' | 'aircraft')
+     */
+    fieldType: 'text' | 'textarea' | 'number' | 'boolean' | 'date' | 'select' | 'multi-select' | 'airport' | 'airline' | 'aircraft';
+    required: Generated<boolean>;
+    active: Generated<boolean>;
+    order: Generated<number>;
+    defaultValue: unknown | null;
+    options: unknown | null;
+    validationJson: unknown | null;
+    createdAt: Generated<Timestamp>;
+    updatedAt: Timestamp;
+};
+export type custom_field_value = {
+    id: Generated<number>;
+    fieldId: number;
+    /**
+     * @kyselyType('flight' | 'flight_passenger')
+     */
+    entityType: 'flight' | 'flight_passenger';
+    entityId: string;
+    value: unknown;
+    createdAt: Generated<Timestamp>;
+    updatedAt: Timestamp;
+};
+export type flight = {
+    id: Generated<number>;
+    date: string;
+    /**
+     * @kyselyType('day' | 'month' | 'year')
+     */
+    datePrecision: Generated<'day' | 'month' | 'year'>;
+    /**
+     * YYYY-MM-DDTHH:mm:ss.sssZ (ISO-8601)
+     */
+    departure: string | null;
+    /**
+     * YYYY-MM-DDTHH:mm:ss.sssZ (ISO-8601)
+     */
+    arrival: string | null;
+    /**
+     * YYYY-MM-DDTHH:mm:ss.sssZ (ISO-8601)
+     */
+    departureScheduled: string | null;
+    /**
+     * YYYY-MM-DDTHH:mm:ss.sssZ (ISO-8601)
+     */
+    arrivalScheduled: string | null;
+    /**
+     * YYYY-MM-DDTHH:mm:ss.sssZ (ISO-8601)
+     */
+    takeoffScheduled: string | null;
+    /**
+     * YYYY-MM-DDTHH:mm:ss.sssZ (ISO-8601)
+     */
+    takeoffActual: string | null;
+    /**
+     * YYYY-MM-DDTHH:mm:ss.sssZ (ISO-8601)
+     */
+    landingScheduled: string | null;
+    /**
+     * YYYY-MM-DDTHH:mm:ss.sssZ (ISO-8601)
+     */
+    landingActual: string | null;
+    duration: number | null;
+    departureTerminal: string | null;
+    departureGate: string | null;
+    arrivalTerminal: string | null;
+    arrivalGate: string | null;
+    flightNumber: string | null;
+    aircraftReg: string | null;
+    note: string | null;
+    fromId: number | null;
+    toId: number | null;
+    aircraftId: number | null;
+    airlineId: number | null;
+    createdById: string | null;
+};
+export type flight_passenger = {
+    id: Generated<number>;
+    flightId: number;
+    userId: string | null;
+    guestName: string | null;
+    /**
+     * @kyselyType('window' | 'aisle' | 'middle' | 'pilot' | 'copilot' | 'jumpseat' | 'other')
+     */
+    seat: 'window' | 'aisle' | 'middle' | 'pilot' | 'copilot' | 'jumpseat' | 'other' | null;
+    /**
+     * Seat number (e.g. 12A)
+     */
+    seatNumber: string | null;
+    /**
+     * @kyselyType('economy' | 'economy+' | 'business' | 'first' | 'private')
+     */
+    seatClass: 'economy' | 'economy+' | 'business' | 'first' | 'private' | null;
+    /**
+     * @kyselyType('leisure' | 'business' | 'crew' | 'other')
+     */
+    flightReason: 'leisure' | 'business' | 'crew' | 'other' | null;
+};
+export type flight_track = {
+    flightId: number;
+    track: unknown;
+    /**
+     * @kyselyType('gpx' | 'kml' | 'csv' | 'readsb')
+     */
+    sourceFormat: 'gpx' | 'kml' | 'csv' | 'readsb';
+    sourceName: string | null;
+    pointCount: number;
+    createdAt: Generated<Timestamp>;
+    updatedAt: Generated<Timestamp>;
+};
+export type mobile_session = {
+    id: Generated<number>;
+    userId: string;
+    token: string;
+    createdAt: Generated<Timestamp>;
+    expiresAt: Timestamp;
+    lastUsed: Timestamp | null;
+};
+export type oauth_link_token = {
+    id: string;
+    token: string;
+    userId: string;
+    oauthSub: string;
+    expiresAt: Timestamp;
+    createdAt: Generated<Timestamp>;
+};
+export type public_share = {
+    id: Generated<number>;
+    userId: string;
+    slug: string;
+    expiresAt: Timestamp | null;
+    createdAt: Generated<Timestamp>;
+    showMap: Generated<boolean>;
+    showStats: Generated<boolean>;
+    showFlightList: Generated<boolean>;
+    dateFrom: string | null;
+    dateTo: string | null;
+    showFlightNumbers: Generated<boolean>;
+    showAirlines: Generated<boolean>;
+    showAircraft: Generated<boolean>;
+    showTimes: Generated<boolean>;
+    showTracks: Generated<boolean>;
+    showDates: Generated<boolean>;
+    showSeat: Generated<boolean>;
+};
+export type session = {
+    id: string;
+    expiresAt: Timestamp;
+    userId: string;
+};
+export type user = {
+    id: string;
+    username: string;
+    displayName: string;
+    password: string | null;
+    /**
+     * @kyselyType('user' | 'admin' | 'owner')
+     */
+    role: 'user' | 'admin' | 'owner';
+    oauthId: string | null;
+    /**
+     * @kyselyType('km' | 'mi' | 'nm')
+     */
+    distanceUnit: Generated<'km' | 'mi' | 'nm'>;
+    /**
+     * @kyselyType('kt' | 'mph' | 'kmh' | 'ms')
+     */
+    windSpeedUnit: Generated<'kt' | 'mph' | 'kmh' | 'ms'>;
+    /**
+     * @kyselyType('c' | 'f')
+     */
+    temperatureUnit: Generated<'c' | 'f'>;
+    /**
+     * @kyselyType('hpa' | 'inhg')
+     */
+    pressureUnit: Generated<'hpa' | 'inhg'>;
+    /**
+     * @kyselyType('12h' | '24h' | 'auto')
+     */
+    timeFormat: Generated<'12h' | '24h' | 'auto'>;
+    /**
+     * @kyselyType('iso' | 'us' | 'eu' | 'auto')
+     */
+    dateFormat: Generated<'iso' | 'us' | 'eu' | 'auto'>;
+    /**
+     * @kyselyType('mon' | 'sun' | 'auto')
+     */
+    weekStartsOn: Generated<'mon' | 'sun' | 'auto'>;
+    /**
+     * @kyselyType('airport' | 'utc' | 'system')
+     */
+    flightTimeDisplay: Generated<'airport' | 'utc' | 'system'>;
+};
+export type visited_country = {
+    id: Generated<number>;
+    /**
+     * ISO 3166-1 alpha-2 or EU user-assigned country code
+     */
+    code: string;
+    /**
+     * @kyselyType('lived' | 'visited' | 'layover' | 'wishlist')
+     */
+    status: 'lived' | 'visited' | 'layover' | 'wishlist';
+    note: string | null;
+    userId: string;
+};
+export type DB = {
+    aircraft: aircraft;
+    airline: airline;
+    airport: airport;
+    apiKey: api_key;
+    appConfig: app_config;
+    customFieldDefinition: custom_field_definition;
+    customFieldValue: custom_field_value;
+    flight: flight;
+    flightPassenger: flight_passenger;
+    flightTrack: flight_track;
+    mobileSession: mobile_session;
+    oauthLinkToken: oauth_link_token;
+    publicShare: public_share;
+    session: session;
+    user: user;
+    visitedCountry: visited_country;
+};

@@ -1,0 +1,216 @@
+import { z } from 'zod';
+
+import { page } from '$app/state';
+import {
+  type CreateFlight,
+  FlightReasons,
+  SeatClasses,
+  SeatTypes,
+} from '$lib/db/types';
+import type { PlatformOptions } from '$lib/import/model';
+import { getAircraftByIcao } from '$lib/utils/data/aircraft';
+import { getAirlineByIcao } from '$lib/utils/data/airlines';
+import { getAirportByIcao } from '$lib/utils/data/airports/cache';
+import { usernameSchema } from '$lib/zod/user';
+
+const AirTrailFile = z.object({
+  flights: z
+    .object({
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      from: z.object({
+        code: z.string().max(4, 'Airport code is too long'),
+      }),
+      to: z.object({
+        code: z.string().max(4, 'Airport code is too long'),
+      }),
+      departure: z
+        .string()
+        .datetime({ offset: true, message: 'Invalid datetime' })
+        .nullable(),
+      arrival: z
+        .string()
+        .datetime({ offset: true, message: 'Invalid datetime' })
+        .nullable(),
+      duration: z.number().int().positive().nullable(),
+      airline: z.string().max(4, 'Airline is too long').nullable(),
+      flightNumber: z.string().max(10, 'Flight number is too long').nullable(), // should cover all cases
+      aircraft: z.string().max(4, 'Aircraft is too long').nullable(),
+      aircraftReg: z
+        .string()
+        .max(10, 'Aircraft registration is too long')
+        .nullable(),
+      flightReason: z.enum(FlightReasons).nullable(),
+      note: z.string().max(1000, 'Note is too long').nullable(),
+      seats: z
+        .object({
+          userId: z.string().nullable(),
+          guestName: z.string().max(50, 'Guest name is too long').nullable(),
+          seat: z.enum(SeatTypes).nullable(),
+          seatNumber: z.string().max(5, 'Seat number is too long').nullable(), // 12A-1 for example
+          seatClass: z.enum(SeatClasses).nullable(),
+        })
+        .refine((data) => data.userId ?? data.guestName, {
+          message: 'Select a user or add a guest name',
+          path: ['userId'],
+        })
+        .array()
+        .min(1, 'Add at least one seat')
+        .refine((data) => data.some((seat) => seat.userId), {
+          message: 'At least one seat must be assigned to a user',
+        })
+        .default([
+          {
+            userId: '<USER_ID>',
+            guestName: null,
+            seat: null,
+            seatNumber: null,
+            seatClass: null,
+          },
+        ]),
+    })
+    .array()
+    .min(1, 'At least one flight is required'),
+  users: z
+    .object({
+      id: z.string().min(3),
+      username: usernameSchema,
+      displayName: z.string().min(3),
+    })
+    .array()
+    .min(1, 'At least one user is required'),
+});
+
+export const processLegacyAirTrailFile = async (
+  input: string,
+  options: PlatformOptions,
+) => {
+  const user = page.data.user;
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(input);
+  } catch (_) {
+    throw new Error('Invalid JSON found in AirTrail file');
+  }
+
+  const result = AirTrailFile.safeParse(parsed);
+  if (!result.success) {
+    throw new Error(result.error.message);
+  }
+
+  const flights: CreateFlight[] = [];
+  const data = result.data;
+  const dataUsers = data.users.reduce<
+    Record<
+      string,
+      {
+        id: string;
+        username: string;
+        displayName: string;
+      }
+    >
+  >((acc, user) => {
+    acc[user.id] = user;
+    return acc;
+  }, {});
+  const unknownAirports: Record<string, number[]> = {};
+  const unknownAirlines: Record<string, number[]> = {};
+  for (const rawFlight of data.flights) {
+    const { seats, ...legacyFlight } = rawFlight;
+    const passengers = seats.map((seat) => {
+      const dataUser = dataUsers?.[seat.userId ?? ''];
+      const mappedUserId =
+        dataUser?.username === user.username ? user.id : null;
+      /*
+        1. If the user is known, no guest name is needed.
+        2. If the user is unknown, but the guest name is known, use the guest name.
+        3. If the user is unknown and the guest name is unknown, use the provided display name (this could happen if the user is not in the database).
+         */
+      const guestName = mappedUserId
+        ? null
+        : seat.guestName
+          ? seat.guestName
+          : dataUser
+            ? dataUser.displayName
+            : null;
+
+      return {
+        ...seat,
+        userId: mappedUserId,
+        guestName,
+        flightReason: rawFlight.flightReason,
+      };
+    });
+
+    // If exported with a different username, add the user to the list manually.
+    if (!passengers.some((seat) => seat.userId === user.id)) {
+      passengers.push({
+        userId: user.id,
+        guestName: null,
+        seat: null,
+        seatClass: null,
+        seatNumber: null,
+        flightReason: rawFlight.flightReason,
+      });
+    }
+
+    const mappedFrom = options.airportMapping?.[rawFlight.from.code];
+    const mappedTo = options.airportMapping?.[rawFlight.to.code];
+    const from = mappedFrom ?? (await getAirportByIcao(rawFlight.from.code));
+    const to = mappedTo ?? (await getAirportByIcao(rawFlight.to.code));
+
+    let airline = null;
+    if (rawFlight.airline) {
+      const mappedAirline = options.airlineMapping?.[rawFlight.airline];
+      airline = mappedAirline || (await getAirlineByIcao(rawFlight.airline));
+    }
+
+    const flightIndex = flights.length;
+
+    if (!from) {
+      (unknownAirports[rawFlight.from.code] ??= []).push(flightIndex);
+    }
+    if (!to) {
+      (unknownAirports[rawFlight.to.code] ??= []).push(flightIndex);
+    }
+    if (!airline && rawFlight.airline) {
+      (unknownAirlines[rawFlight.airline] ??= []).push(flightIndex);
+    }
+
+    flights.push({
+      ...legacyFlight,
+      // Legacy format doesn't support scheduled/actual datetime fields
+      departureScheduled: null,
+      arrivalScheduled: null,
+      takeoffScheduled: null,
+      takeoffActual: null,
+      landingScheduled: null,
+      landingActual: null,
+      datePrecision: 'day',
+      departureTerminal: null,
+      departureGate: null,
+      arrivalTerminal: null,
+      arrivalGate: null,
+      airline,
+      aircraft: rawFlight.aircraft
+        ? await getAircraftByIcao(rawFlight.aircraft)
+        : null,
+      from: from || null,
+      to: to || null,
+      passengers,
+    });
+  }
+
+  return {
+    flights,
+    unknowns: {
+      airports: unknownAirports,
+      airlines: unknownAirlines,
+      aircraft: {},
+    },
+    exportedUsers: [],
+  };
+};

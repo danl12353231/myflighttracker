@@ -1,0 +1,41 @@
+services:
+  db:
+    container_name: airtrail_db
+    image: postgres:16-alpine
+    restart: always
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${DB_DATABASE_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE_NAME}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  airtrail:
+    container_name: airtrail
+    image: johly/airtrail:latest
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - 3000:3000
+    volumes:
+      # Required for file uploads (e.g., airline icons)
+      # The path to the right of the colon needs to match UPLOAD_LOCATION in your .env file
+      # It needs to be writable for UID:GID 1000:1000
+      - uploads:/app/uploads
+      # If docker isn't running as UID 1000 on your host, consider using a bind mount volume instead, such as:
+      # - ./data/uploads:/app/uploads
+      # and create the folder ./data/uploads with UID:GID 1000:1000
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:
+  uploads:

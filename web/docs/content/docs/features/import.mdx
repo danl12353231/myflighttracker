@@ -1,0 +1,224 @@
+---
+title: Import
+---
+
+The import feature allows you to import flight data from other sources into AirTrail.
+Currently, AirTrail supports importing flights from [MyFlightRadar24](https://my.flightradar24.com)
+, [App in the Air](https://appintheair.com), [JetLog](https://github.com/pbogre/jetlog), [TripIt (ICS)](https://www.tripit.com)
+, [Flighty](https://flightyapp.com), [byAir](https://byair.app), [JetLovers](https://www.jetlovers.com), [OpenFlights](https://openflights.org), [Miles & More](https://www.miles-and-more.com) and [AirTrail JSON files](/docs/features/export).
+
+## Import flights from MyFlightradar24
+
+While logged in to your MyFlightradar24 account, follow these steps to export your flights:
+
+1. Go to the [MyFlightradar24](https://my.flightradar24.com) website.
+2. Click on the "Settings" button in the top right corner.
+3. Click on the "Export" tab.
+4. Click on the "Download CSV" button to download your flights as a CSV file.
+
+Once you have the CSV file, you can import it into AirTrail by following these steps:
+
+1. Go to the AirTrail application.
+2. Go to the settings page.
+3. Click on the "Import" tab.
+4. Click on the "FlightRadar24" tab.
+5. Click on "Select file" and select the CSV file you downloaded from MyFlightradar24.
+6. Click on the "Import" button to start the import process.
+
+After the import process is complete, you will see your flights on the map.
+
+## Import flights from App in the Air
+
+While logged in to your App in the Air account, follow these steps to export your flights:
+
+1. Open the App in the Air app on your device.
+2. Go to the "Profile" tab.
+3. Go to the "Settings".
+4. Under "Other" click "Export data" to get your flights in your email.
+
+Once you have the text file, you can import it into AirTrail by following these steps:
+
+1. Go to the AirTrail application.
+2. Go to the settings page.
+3. Click on the "Import" tab.
+4. Click on the "App in the Air" tab.
+5. Click on "Select file" and select the text file you received from App in the Air.
+6. Click on the "Import" button to start the import process.
+
+After the import process is complete, you will see your flights on the map.
+
+## Import flights from JetLog
+
+While logged in to your JetLog account, follow these steps to export your flights:
+
+1. Go to your JetLog instance.
+2. Go to the "Settings" page in the top right corner.
+3. Click on the "Export to CSV" button to download your flights as a CSV file.
+
+Once you have the CSV file, you can import it into AirTrail by following these steps:
+
+1. Go to the AirTrail application.
+2. Go to the settings page.
+3. Click on the "Import" tab.
+4. Click on the "JetLog" tab.
+5. Click on "Select file" and select the CSV file you downloaded from JetLog.
+6. Click on the "Import" button to start the import process.
+
+After the import process is complete, you will see your flights on the map.
+
+## Import flights from TripIt (ICS)
+
+TripIt allows exporting trip details to an ICS calendar file. You can import flight events from that file into AirTrail.
+
+Export from TripIt:
+
+1. Open TripIt on the web and navigate to your trip.
+2. Use the Export/Calendar option to download the trip as an .ics file (Trip export).
+
+Import the ICS file into AirTrail:
+
+1. Open the AirTrail application.
+2. Go to the settings page and open the Import tab.
+3. Choose the source "TripIt (ICS)".
+4. Select your .ics file.
+5. Click Import.
+
+Notes and limitations:
+
+- All-day trip header events (VALUE=DATE) are ignored; only flight events are imported.
+- Flight events are detected when the SUMMARY looks like "SK2535 CPH to BHX" (airline + flight number, origin IATA, destination IATA).
+- Times are parsed from DTSTART/DTEND; Zulu (Z) and TZID times are supported.
+
+## Import flights from Flighty
+
+Flighty is a popular flight tracking app that allows you to export your flight data as a CSV file.
+
+Export from Flighty:
+
+1. Open the Flighty app on your device.
+2. Go to the "Profile" tab.
+3. Tap on "Settings" (gear icon).
+4. Scroll down to the "Manage" section and tap on "Account Data".
+5. Choose "Export Your Flights".
+6. Share or save the CSV file to your device.
+
+Import the CSV file into AirTrail:
+
+1. Open the AirTrail application.
+2. Go to the settings page and open the Import tab.
+3. Choose the source "Flighty".
+4. Select your CSV file from Flighty.
+5. Click Import.
+
+## Import flights from byAir
+
+byAir is a flight tracking app that allows you to export your flight data as a CSV file.
+
+Export from byAir:
+
+1. Open the byAir app.
+2. Go to the "Profile" tab.
+3. Scroll down to the "Help" section and tap on "Export data".
+4. Enter your email address and click "Export".
+
+Import the CSV file into AirTrail:
+
+1. Open the AirTrail application.
+2. Go to the settings page and open the Import tab.
+3. Choose the source "byAir".
+4. Select your CSV file from byAir.
+5. Click Import.
+
+## Import flights from JetLovers
+
+JetLovers allows you to export your flight data as a CSV file.
+
+Export from JetLovers:
+
+1. Open [JetLovers](https://www.jetlovers.com).
+2. Go to "My flights".
+3. Click "CSV Export".
+
+Import the CSV file into AirTrail:
+
+1. Open the AirTrail application.
+2. Go to the settings page and open the Import tab.
+3. Choose the source "JetLovers".
+4. Select your CSV file from JetLovers.
+5. Click Import.
+
+## Import flights from OpenFlights
+
+OpenFlights can export your flights as a CSV backup.
+
+Export from OpenFlights:
+
+1. Open OpenFlights.
+2. Go to Settings.
+3. Click "Backup to CSV" to download the CSV file.
+
+Import the CSV file into AirTrail:
+
+1. Open the AirTrail application.
+2. Go to the settings page and open the Import tab.
+3. Choose the source "OpenFlights".
+4. Select your OpenFlights CSV file.
+5. Click Import.
+
+## Import flights from Miles & More
+
+Miles & More (Lufthansa Group's frequent-flyer program) doesn't offer a self-service export button,
+but it exposes your own flight history as JSON through an authenticated API endpoint you can open
+directly in your browser while logged in.
+
+Export from Miles & More:
+
+1. Log in to your account at [miles-and-more.com](https://www.miles-and-more.com).
+2. In the same browser, open
+   `https://api.travelid.lufthansa.com/flightstats/v3/me/segmentList?departureDateRange=10000%20months&size=10000&page=0`.
+3. Save the JSON response shown in your browser as a `.json` file (e.g. via "Save Page As" or your
+   browser's dev tools).
+
+Import the JSON file into AirTrail:
+
+1. Open the AirTrail application.
+2. Go to the settings page and open the Import tab.
+3. Choose the source "Miles & More".
+4. Select the JSON file you saved.
+5. Click Import.
+
+Notes and limitations:
+
+- Fare/booking class letters (e.g. `F`, `C`, `M`) are mapped to AirTrail's seat class on a
+  best-effort basis and may not be accurate for every operating carrier — double-check imported
+  seat classes.
+- Aircraft types are matched from Miles & More's IATA type codes against a built-in lookup table;
+  uncommon types may not be recognized and are left blank.
+- The PNR and Miles & More loyalty numbers (award/status miles, status/GUP/HON points) have no
+  equivalent field in AirTrail and are appended to the flight's note instead.
+
+## Import flights from AirTrail JSON files
+
+Once you have the JSON file, you can import it into AirTrail by following these steps:
+
+1. Go to the AirTrail application.
+2. Go to the settings page.
+3. Click on the "Import" tab.
+4. Click on the "AirTrail" tab.
+5. Click on "Select file" and select the JSON file you want to import.
+6. Click on the "Import" button to start the import process.
+
+After the import process is complete, you will see your flights on the map.
+
+AirTrail offers two import modes:
+
+- Personal import is available to every user. Select the account in the export
+  that belongs to you. AirTrail imports only that account's flights and adds
+  other passengers as guests.
+- Instance restore is available to admins and owners. Enable "Restore flights
+  for all mapped users" to preserve user assignments and deduplicate against
+  every flight on the instance.
+
+AirTrail treats uploaded files as untrusted. The server rejects personal
+imports that assign flights to another local user, even if the file or client
+requests those assignments.

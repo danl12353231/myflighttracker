@@ -1,0 +1,10 @@
+{
+  "items": [
+    "add-flight",
+    "custom-fields",
+    "statistics",
+    "import",
+    "export",
+    "oauth"
+  ]
+}
