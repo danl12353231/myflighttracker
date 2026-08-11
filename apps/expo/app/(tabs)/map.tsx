@@ -13,6 +13,7 @@ export default function MapScreen() {
   const flights = useFlights("mine");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [satellite, setSatellite] = useState(false);
+  const [globe, setGlobe] = useState(false);
 
   const pick = (id: number | null) => {
     setSelectedId(id);
@@ -42,6 +43,20 @@ export default function MapScreen() {
           >
             <Ionicons
               name="layers-outline"
+              size={20}
+              color={colors.textPrimary}
+            />
+          </Pressable>
+          <Pressable
+            style={styles.btn}
+            onPress={() => {
+              const next = !globe;
+              setGlobe(next);
+              mapRef.current?.setProjection(next);
+            }}
+          >
+            <Ionicons
+              name={globe ? "earth" : "earth-outline"}
               size={20}
               color={colors.textPrimary}
             />

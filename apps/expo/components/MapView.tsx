@@ -67,8 +67,28 @@ script.onload = function () {
     zoom: 1.5,
     attributionControl: false
   });
-  var FT = { map: map, route: [], satellite: false };
+  var FT = { map: map, route: [], satellite: false, globe: false };
   window.FT = FT;
+
+  function setProjection(globe) {
+    FT.globe = globe;
+    if (typeof map.setProjection === 'function') {
+      map.setProjection({ type: globe ? 'globe' : 'mercator' });
+    }
+    // Globe doesn't support rotation/bearing; keep the camera square.
+    if (globe) {
+      map.easeTo({ bearing: 0, pitch: 0, duration: 400 });
+      map.dragRotate.disable();
+      map.touchZoomRotate.disableRotation();
+    } else {
+      map.dragRotate.enable();
+      map.touchZoomRotate.enableRotation();
+    }
+    if (FT.route.length > 1) {
+      var mid = FT.route[Math.floor(FT.route.length / 2)];
+      map.flyTo({ center: mid, zoom: Math.max(map.getZoom(), globe ? 2 : 4), duration: 700 });
+    }
+  }
 
   function drawSecondary() {
     var feats = (window.__INIT__.secondary || []).map(function (pair) {
@@ -125,6 +145,8 @@ script.onload = function () {
       FT.satellite = d.value;
       map.setStyle(styleFor(d.value));
       map.once('styledata', function () { drawSecondary(); drawRoute(); });
+    } else if (d.type === 'projection') {
+      setProjection(!!d.value);
     } else if (d.type === 'recenter' && FT.route.length > 1) {
       var mid = FT.route[Math.floor(FT.route.length / 2)];
       map.flyTo({ center: mid, zoom: Math.max(map.getZoom(), 5), duration: 900 });
@@ -138,6 +160,7 @@ document.head.appendChild(script);
 export type MapViewHandle = {
   setFlight: (flight: Flight | null) => void;
   setSatellite: (value: boolean) => void;
+  setProjection: (globe: boolean) => void;
   recenter: () => void;
 };
 
@@ -193,6 +216,11 @@ export const MapView = forwardRef<
     },
     setSatellite(value) {
       webRef.current?.postMessage(JSON.stringify({ type: "satellite", value }));
+    },
+    setProjection(globe) {
+      webRef.current?.postMessage(
+        JSON.stringify({ type: "projection", value: globe }),
+      );
     },
     recenter() {
       webRef.current?.postMessage(JSON.stringify({ type: "recenter" }));
