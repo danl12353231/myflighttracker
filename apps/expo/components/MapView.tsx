@@ -118,10 +118,10 @@ script.onload = function () {
   function drawAirports() {
     if (!map.getSource('apts')) {
       map.addSource('apts', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      // Invisible tap target.
+      // Visible (nearly transparent) tap target so it is always rendered/queryable.
       map.addLayer({
         id: 'apt-tap', type: 'circle', source: 'apts',
-        paint: { 'circle-radius': 18, 'circle-color': 'rgba(0,0,0,0)', 'circle-opacity': 0 }
+        paint: { 'circle-radius': 16, 'circle-color': 'rgba(26,115,232,0.01)', 'circle-opacity': 0.01 }
       });
       // Pin dot (tip of the pin).
       map.addLayer({
@@ -133,27 +133,22 @@ script.onload = function () {
           'circle-stroke-color': '#ffffff'
         }
       });
-      // Label chip above the pin.
+      // Label above the pin (halo-only for max WebView/globe compatibility).
       map.addLayer({
         id: 'apt-label', type: 'symbol', source: 'apts',
         layout: {
           'text-field': ['get', 'name'],
-          'text-size': 11,
+          'text-size': 12,
           'text-font': ['Open Sans Semibold'],
           'text-anchor': 'bottom',
-          'text-offset': [0, -0.8],
+          'text-offset': [0, -0.6],
           'text-allow-overlap': true,
-          'text-ignore-placement': true,
-          'text-padding': [3, 5]
+          'text-ignore-placement': true
         },
         paint: {
           'text-color': '#ffffff',
-          'text-halo-color': 'rgba(11,11,13,0.9)',
-          'text-halo-width': 1.4,
-          'text-background-color': 'rgba(11,11,13,0.72)',
-          'text-background-opacity': 1,
-          'text-border-color': 'rgba(255,255,255,0.28)',
-          'text-border-width': 1
+          'text-halo-color': 'rgba(11,11,13,0.95)',
+          'text-halo-width': 2.2
         }
       });
     }
@@ -226,25 +221,36 @@ script.onload = function () {
 
   // Tap detection for airport markers.
   var APT_LAYERS = ['apt-tap', 'apt-dot', 'apt-label'];
-  map.on('click', function (e) {
-    var feats = map.queryRenderedFeatures(e.point, { layers: APT_LAYERS });
-    if (feats.length && feats[0].properties && feats[0].properties.id != null) {
+  function sendAirport(id) {
+    if (id != null && window.ReactNativeWebView) {
       window.ReactNativeWebView.postMessage(
-        JSON.stringify({ type: 'airport', id: Number(feats[0].properties.id) })
+        JSON.stringify({ type: 'airport', id: Number(id) })
       );
-      return;
+      return true;
     }
-    // Fallback: a slightly larger query window in case the marker is small.
-    var nearby = map.queryRenderedFeatures(
-      [[e.point.x - 14, e.point.y - 14], [e.point.x + 14, e.point.y + 14]],
-      { layers: APT_LAYERS }
-    );
-    if (nearby.length && nearby[0].properties && nearby[0].properties.id != null) {
-      window.ReactNativeWebView.postMessage(
-        JSON.stringify({ type: 'airport', id: Number(nearby[0].properties.id) })
-      );
+    return false;
+  }
+  function pickAirportAt(pt) {
+    if (!pt || typeof pt.x !== 'number') return false;
+    // Most reliable: project each airport to screen space and test proximity.
+    var best = null;
+    var bestDist = 30;
+    for (var i = 0; i < FT.airports.length; i++) {
+      var a = FT.airports[i];
+      try {
+        var p = map.project([a.lon, a.lat]);
+        var d = Math.hypot(p.x - pt.x, p.y - pt.y);
+        if (d < bestDist) {
+          bestDist = d;
+          best = a.id;
+        }
+      } catch (err) {}
     }
-  });
+    if (best != null) return sendAirport(best);
+    return false;
+  }
+  map.on('click', function (e) { pickAirportAt(e.point); });
+  map.on('touchend', function (e) { pickAirportAt(e.point); });
 
   window.addEventListener('message', function (e) {
     var d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
