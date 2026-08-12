@@ -4,272 +4,292 @@ import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
 import type { Flight, VisitedAirport } from "../lib/router";
 
-const SATELLITE_TILES =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const DARK_TILES = "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-const LABEL_TILES =
-  "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
-
 type LonLat = [number, number];
 
-export function buildRoute(a: LonLat, b: LonLat, steps = 60): LonLat[] {
+export function buildRoute(a: LonLat, b: LonLat, steps = 48): LonLat[] {
+  // Great-circle interpolation.
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const toDeg = (d: number) => (d * 180) / Math.PI;
+  const la1 = toRad(a[1]);
+  const la2 = toRad(b[1]);
+  const dLon = toRad(b[0] - a[0]);
+  const la1s = Math.sin(la1);
+  const la2s = Math.sin(la2);
+  const la1c = Math.cos(la1);
+  const la2c = Math.cos(la2);
+  const d = Math.acos(Math.min(1, la1s * la2s + la1c * la2c * Math.cos(dLon)));
   const pts: LonLat[] = [];
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
-    pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+    if (d < 1e-9) {
+      pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+      continue;
+    }
+    const sd = Math.sin(d);
+    const x = la1c * la2c * Math.sin(dLon);
+    const y = la1c * la2s - la1s * la2c * Math.cos(dLon);
+    const z = la1s * la2s + la1c * la2c * Math.cos(dLon);
+    const sina = Math.sin((1 - t) * d) / sd;
+    const sinb = Math.sin(t * d) / sd;
+    const la = la1s * sina + la2s * sinb;
+    const lo = Math.atan2(x * sina + y * sinb, z);
+    pts.push([toDeg(lo), toDeg(Math.asin(la))]);
   }
   return pts;
 }
 
-const STYLE_FN = `function styleFor(sat) {
-  return {
-    version: 8,
-    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-    sources: {
-      base: { type: 'raster', tiles: [ sat
-        ? ${JSON.stringify(SATELLITE_TILES)}
-        : ${JSON.stringify(DARK_TILES)} ], tileSize: 256 },
-      labels: { type: 'raster', tiles: [${JSON.stringify(LABEL_TILES)}], tileSize: 256 }
-    },
-    layers: [
-      { id: 'base', type: 'raster', source: 'base' },
-      { id: 'labels', type: 'raster', source: 'labels' }
-    ]
-  };
-}`;
-
-// maplibre-gl@4 always ships setProjection. Skip the pre-load check that crashes.
-const CHECK_PROJ = "";
-
-const SCRIPT_SRC = "https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js";
-const STYLE_CSS = "https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css";
-
+// Three.js globe in a WebView. Self-contained: three.js from CDN, Natural
+// Earth country borders, great-circle route arcs, airport markers, custom
+// orbit controls, and tap-to-select via raycasting.
 const buildHtml = (init: {
-  route: LonLat[];
-  secondary: LonLat[][];
-  airports: { id: number; code: string; lon: number; lat: number }[];
-}) =>
-  `<!DOCTYPE html>
+  airports: {
+    id: number;
+    code: string;
+    name: string;
+    lon: number;
+    lat: number;
+  }[];
+}) => `<!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no">
-<style>html, body, #map { margin:0; height:100%; width:100%; background:#0b0b0d; }</style>
+<style>
+  html, body { margin:0; height:100%; width:100%; overflow:hidden; background:#05060a; }
+  #c { position:fixed; inset:0; }
+</style>
 </head>
-<body><div id="map"></div>
+<body>
+<div id="c"></div>
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 <script>
-window.__INIT__ = ${JSON.stringify(init)};
-${CHECK_PROJ}
-${STYLE_FN}
-var script = document.createElement('script');
-script.src = ${JSON.stringify(SCRIPT_SRC)};
-script.onload = function () {
-  var css = document.createElement('link');
-  css.rel = 'stylesheet';
-  css.href = ${JSON.stringify(STYLE_CSS)};
-  document.head.appendChild(css);
-  var map = new maplibregl.Map({
-    container: 'map',
-    style: styleFor(false),
-    center: [0, 20],
-    zoom: 1.5,
-    minZoom: -2,
-    maxZoom: 22,
-    attributionControl: false
-  });
-  var FT = {
-    map: map,
-    route: [],
-    satellite: false,
-    globe: true,
-    forceProj: false,
-    airports: window.__INIT__.airports || []
-  };
-  window.FT = FT;
+(function () {
+  var WIN = window;
+  var INIT_APT = ${JSON.stringify(init.airports)};
 
-  function setProjection(globe, force) {
-    if (typeof force !== "undefined") FT.forceProj = force;
-    FT.globe = globe;
-    try { map.setProjection({ type: FT.globe ? 'globe' : 'mercator' }); } catch (e) {}
-    if (FT.globe) {
-      map.easeTo({ bearing: 0, pitch: 0, duration: 300 });
-      map.dragRotate.enable();
-      map.touchZoomRotate.enableRotation();
-    } else {
-      map.dragRotate.enable();
-      map.touchZoomRotate.enableRotation();
-    }
-    if (FT.route.length > 1) {
-      var mid = FT.route[Math.floor(FT.route.length / 2)];
-      map.flyTo({ center: mid, zoom: Math.max(map.getZoom(), globe ? 2 : 4), duration: 700 });
-    }
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x05060a);
+  var camera = new THREE.PerspectiveCamera(45, WIN.innerWidth / WIN.innerHeight, 0.1, 1000);
+  var renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(WIN.innerWidth, WIN.innerHeight);
+  renderer.setPixelRatio(Math.min(WIN.devicePixelRatio || 1, 2));
+  document.getElementById('c').appendChild(renderer.domElement);
+
+  var GLOBE_R = 1;
+  var group = new THREE.Group();
+  scene.add(group);
+
+  // Camera: perspective looking at the globe.
+  camera.position.set(0, 0.5, 3);
+  camera.lookAt(0, 0, 0);
+
+  // Lights.
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  var dir = new THREE.DirectionalLight(0xffffff, 0.7);
+  dir.position.set(3, 2, 4);
+  scene.add(dir);
+
+  function llToVec(lat, lon, r) {
+    var phi = (90 - lat) * Math.PI / 180;
+    var theta = (lon + 180) * Math.PI / 180;
+    return new THREE.Vector3(
+      -r * Math.sin(phi) * Math.cos(theta),
+      r * Math.cos(phi),
+      r * Math.sin(phi) * Math.sin(theta)
+    );
   }
 
-  function drawSecondary(feats) {
-    var fc = { type: 'FeatureCollection', features: feats };
-    if (!map.getSource('secondary')) {
-      map.addSource('secondary', { type: 'geojson', data: fc });
-      map.addLayer({ id: 'secondary', type: 'line', source: 'secondary',
-        paint: { 'line-color': 'rgba(255,255,255,0.18)', 'line-width': 1.5 } });
-    } else {
-      map.getSource('secondary').setData(fc);
-    }
-  }
+  // --- Ocean sphere (dark blue) ---
+  var ocean = new THREE.Mesh(
+    new THREE.SphereGeometry(GLOBE_R, 64, 64),
+    new THREE.MeshPhongMaterial({ color: 0x0a2540, shininess: 10 })
+  );
+  group.add(ocean);
 
-  function drawAirports() {
-    if (!map.getSource('apts')) {
-      map.addSource('apts', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      // Visible (nearly transparent) tap target so it is always rendered/queryable.
-      map.addLayer({
-        id: 'apt-tap', type: 'circle', source: 'apts',
-        paint: { 'circle-radius': 16, 'circle-color': 'rgba(26,115,232,0.01)', 'circle-opacity': 0.01 }
-      });
-      // Pin dot (tip of the pin).
-      map.addLayer({
-        id: 'apt-dot', type: 'circle', source: 'apts',
-        paint: {
-          'circle-radius': 6,
-          'circle-color': '#1a73e8',
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#ffffff'
+  // --- Country borders ---
+  var borderGeo = new THREE.BufferGeometry();
+  var borderPts = [];
+  fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json')
+    .then(function (r) { return r.json(); })
+    .then(function (world) {
+      var linePts = [];
+      function addRing(ring) {
+        for (var i = 0; i < ring.length; i++) {
+          var lon = ring[i][0];
+          var lat = ring[i][1];
+          linePts.push(llToVec(lat, lon, GLOBE_R * 1.002));
         }
-      });
-      // Label above the pin (halo-only for max WebView/globe compatibility).
-      map.addLayer({
-        id: 'apt-label', type: 'symbol', source: 'apts',
-        layout: {
-          'text-field': ['get', 'name'],
-          'text-size': 12,
-          'text-font': ['Open Sans Semibold'],
-          'text-anchor': 'bottom',
-          'text-offset': [0, -0.6],
-          'text-allow-overlap': true,
-          'text-ignore-placement': true
-        },
-        paint: {
-          'text-color': '#ffffff',
-          'text-halo-color': 'rgba(11,11,13,0.95)',
-          'text-halo-width': 2.2
-        }
-      });
-    }
-    var feats = FT.airports.map(function (a) {
-      return {
-        type: 'Feature', geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
-        properties: { id: a.id, code: a.code, name: a.name || a.code }
-      };
-    });
-    map.getSource('apts').setData({ type: 'FeatureCollection', features: feats });
-  }
-
-  function drawRoute() {
-    var r = FT.route;
-    if (r.length < 2) {
-      if (map.getSource('route-line')) {
-        map.getSource('route-line').setData({ type:'FeatureCollection', features:[] });
+        linePts.push(linePts[linePts.length - 1]);
       }
-      return;
-    }
-    if (!map.getSource('route-line')) {
-      map.addSource('route-line', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      map.addLayer({ id: 'route-casing', type: 'line', source: 'route-line',
-        paint: { 'line-color': 'rgba(10,132,255,0.25)', 'line-width': 9 } });
-      map.addLayer({ id: 'route-line', type: 'line', source: 'route-line',
-        paint: { 'line-color': '#0A84FF', 'line-width': 5 } });
-      map.addSource('origin-pt', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      map.addLayer({ id: 'origin-pt', type: 'circle', source: 'origin-pt',
-        paint: { 'circle-radius': 7, 'circle-color': '#30D158', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } });
-      map.addSource('dest-pt', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      map.addLayer({ id: 'dest-pt', type: 'circle', source: 'dest-pt',
-        paint: { 'circle-radius': 7, 'circle-color': '#FF453A', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } });
-    }
-    map.getSource('route-line').setData({ type: 'FeatureCollection',
-      features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: r }, properties: {} }] });
-    map.getSource('origin-pt').setData({ type: 'FeatureCollection',
-      features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: r[0] }, properties: {} }] });
-    map.getSource('dest-pt').setData({ type: 'FeatureCollection',
-      features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: r[r.length-1] }, properties: {} }] });
-  }
+      world.features.forEach(function (f) {
+        var g = f.geometry;
+        if (g.type === 'Polygon') {
+          g.coordinates.forEach(addRing);
+        } else if (g.type === 'MultiPolygon') {
+          g.coordinates.forEach(function (poly) { poly.forEach(addRing); });
+        }
+      });
+      borderGeo.setFromPoints(linePts);
+      var borders = new THREE.LineSegments(
+        borderGeo,
+        new THREE.LineBasicMaterial({ color: 0x4a90d9, transparent: true, opacity: 0.55 })
+      );
+      group.add(borders);
+    });
 
-  function fit() {
-    var r = FT.route;
-    if (r.length < 2) return;
-    var bounds = new maplibregl.LngLatBounds();
-    r.forEach(function (p) { bounds.extend(p); });
-    map.fitBounds(bounds, { padding: { top: 60, right: 40, bottom: 300, left: 40 }, duration: 900 });
-  }
-
-  function applyRoute(route) {
-    FT.route = route;
-    drawRoute();
-    fit();
-  }
-
-  function reDrawAll() {
-    var secondary = window.__INIT__.secondary || [];
-    drawSecondary(secondary.map(function (pair) {
-      return { type: 'Feature', geometry: { type: 'LineString', coordinates: pair }, properties: {} };
-    }));
-    drawAirports();
-    drawRoute();
-    try { map.setProjection({ type: 'globe' }); } catch (e) {}
-  }
-
-  map.on('load', function () {
-    reDrawAll();
-    applyRoute(window.__INIT__.route);
+  // --- Airport markers ---
+  var airportGroup = new THREE.Group();
+  group.add(airportGroup);
+  var airports = INIT_APT.map(function (a) {
+    var pt = llToVec(a.lat, a.lon, GLOBE_R * 1.02);
+    var mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.012, 12, 12),
+      new THREE.MeshBasicMaterial({ color: 0x1a73e8 })
+    );
+    mesh.position.copy(pt);
+    mesh.userData = { id: a.id };
+    airportGroup.add(mesh);
+    return { a: a, mesh: mesh };
   });
 
-  // Tap detection for airport markers.
-  var APT_LAYERS = ['apt-tap', 'apt-dot', 'apt-label'];
-  function sendAirport(id) {
-    if (id != null && window.ReactNativeWebView) {
-      window.ReactNativeWebView.postMessage(
-        JSON.stringify({ type: 'airport', id: Number(id) })
-      );
-      return true;
-    }
-    return false;
-  }
-  function pickAirportAt(pt) {
-    if (!pt || typeof pt.x !== 'number') return false;
-    // Most reliable: project each airport to screen space and test proximity.
-    var best = null;
-    var bestDist = 30;
-    for (var i = 0; i < FT.airports.length; i++) {
-      var a = FT.airports[i];
-      try {
-        var p = map.project([a.lon, a.lat]);
-        var d = Math.hypot(p.x - pt.x, p.y - pt.y);
-        if (d < bestDist) {
-          bestDist = d;
-          best = a.id;
-        }
-      } catch (err) {}
-    }
-    if (best != null) return sendAirport(best);
-    return false;
-  }
-  map.on('click', function (e) { pickAirportAt(e.point); });
-  map.on('touchend', function (e) { pickAirportAt(e.point); });
+  // --- Routes (great-circle arcs) ---
+  var routeGroup = new THREE.Group();
+  group.add(routeGroup);
+  var currentRoute = [];
 
-  window.addEventListener('message', function (e) {
+  function drawRoute(pts) {
+    while (routeGroup.children.length) routeGroup.remove(routeGroup.children[0]);
+    currentRoute = pts || [];
+    if (!pts || pts.length < 2) return;
+    var vecs = pts.map(function (p) { return llToVec(p[1], p[0], GLOBE_R * 1.01); });
+    var geo = new THREE.BufferGeometry().setFromPoints(vecs);
+    routeGroup.add(new THREE.Line(
+      geo,
+      new THREE.LineBasicMaterial({ color: 0x0A84FF, linewidth: 2 })
+    ));
+    // Endpoint dots.
+    [0, vecs.length - 1].forEach(function (idx) {
+      var dot = new THREE.Mesh(
+        new THREE.SphereGeometry(0.02, 10, 10),
+        new THREE.MeshBasicMaterial({ color: idx === 0 ? 0x30D158 : 0xFF453A })
+      );
+      dot.position.copy(vecs[idx]);
+      routeGroup.add(dot);
+    });
+  }
+
+  // --- Controls: drag rotate, wheel/pinch zoom ---
+  var isDown = false;
+  var prevX = 0;
+  var prevY = 0;
+  var rotX = 0;
+  var rotY = 0;
+  var dist = 3;
+  var MIN_DIST = 1.6;
+  var MAX_DIST = 8;
+
+  renderer.domElement.addEventListener('pointerdown', function (e) {
+    isDown = true;
+    prevX = e.clientX;
+    prevY = e.clientY;
+  });
+  WIN.addEventListener('pointerup', function (e) {
+    if (isDown && Math.abs(e.clientX - prevX) < 5 && Math.abs(e.clientY - prevY) < 5) {
+      pick(e.clientX, e.clientY);
+    }
+    isDown = false;
+  });
+  WIN.addEventListener('pointermove', function (e) {
+    if (!isDown) return;
+    var dx = e.clientX - prevX;
+    var dy = e.clientY - prevY;
+    rotY += dx * 0.005;
+    rotX += dy * 0.005;
+    rotX = Math.max(-1.2, Math.min(1.2, rotX));
+    prevX = e.clientX;
+    prevY = e.clientY;
+  });
+  renderer.domElement.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    dist += e.deltaY * 0.002;
+    dist = Math.max(MIN_DIST, Math.min(MAX_DIST, dist));
+  }, { passive: false });
+  // Pinch zoom.
+  var pinchDist = 0;
+  renderer.domElement.addEventListener('touchstart', function (e) {
+    if (e.touches.length === 2) {
+      pinchDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+    }
+  }, { passive: true });
+  renderer.domElement.addEventListener('touchmove', function (e) {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      var d = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      dist += (pinchDist - d) * 0.01;
+      dist = Math.max(MIN_DIST, Math.min(MAX_DIST, dist));
+      pinchDist = d;
+    }
+  }, { passive: false });
+
+  // Tap picking via raycaster.
+  var raycaster = new THREE.Raycaster();
+  var mouse = new THREE.Vector2();
+  function pick(cx, cy) {
+    mouse.x = (cx / WIN.innerWidth) * 2 - 1;
+    mouse.y = -(cy / WIN.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    var hits = raycaster.intersectObjects(airportGroup.children, false);
+    if (hits.length && hits[0].object.userData.id != null && WIN.ReactNativeWebView) {
+      WIN.ReactNativeWebView.postMessage(
+        JSON.stringify({ type: 'airport', id: hits[0].object.userData.id })
+      );
+    }
+  }
+
+  // --- Resize ---
+  WIN.addEventListener('resize', function () {
+    camera.aspect = WIN.innerWidth / WIN.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(WIN.innerWidth, WIN.innerHeight);
+  });
+
+  // --- RN message commands ---
+  WIN.addEventListener('message', function (e) {
     var d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
     if (d.type === 'route') {
-      applyRoute(d.route || []);
-    } else if (d.type === 'satellite') {
-      FT.satellite = d.value;
-      map.setStyle(styleFor(d.value));
-      map.once('styledata', reDrawAll);
+      drawRoute(d.route || []);
     } else if (d.type === 'airports') {
-      FT.airports = d.airports || [];
-      drawAirports();
-    } else if (d.type === 'recenter' && FT.route.length > 1) {
-      var mid = FT.route[Math.floor(FT.route.length / 2)];
-      map.flyTo({ center: mid, zoom: Math.max(map.getZoom(), 5), duration: 900 });
+      // Update airport marker positions.
+      (d.airports || []).forEach(function (a) {
+        var existing = airports.find(function (x) { return x.a.id === a.id; });
+        if (existing) {
+          var pt = llToVec(a.lat, a.lon, GLOBE_R * 1.02);
+          existing.mesh.position.copy(pt);
+        }
+      });
+    } else if (d.type === 'recenter') {
+      dist = 3;
+      rotX = 0;
+      rotY = 0;
     }
   });
-};
-document.head.appendChild(script);
+
+  // --- Render loop ---
+  function animate() {
+    requestAnimationFrame(animate);
+    group.rotation.y = rotY;
+    group.rotation.x = rotX;
+    camera.position.set(0, 0.5, dist);
+    camera.lookAt(0, 0, 0);
+    renderer.render(scene, camera);
+  }
+  animate();
+})();
 </script>
 </body></html>`;
 
@@ -289,20 +309,10 @@ export const MapView = forwardRef<
   }
 >(function MapView({ flights, airports, onAirportTap }, ref) {
   const webRef = useRef<any>(null);
+  const currentFlight = useRef<Flight | null>(null);
 
-  // Only rebuild the WebView when flight/airport data truly changes (first load).
-  // Route updates use the imperative setFlight postMessage exclusively.
+  // Rebuild only when airport set changes (initial load).
   const html = useMemo(() => {
-    const secondary = flights
-      .filter((f) => f.from && f.to)
-      .slice(0, 30)
-      .map(
-        (f) =>
-          [
-            [f.from!.lon, f.from!.lat],
-            [f.to!.lon, f.to!.lat],
-          ] as LonLat[],
-      );
     const markers = airports.map((a) => ({
       id: a.id,
       code: a.iata ?? a.icao,
@@ -310,11 +320,12 @@ export const MapView = forwardRef<
       lon: a.lon,
       lat: a.lat,
     }));
-    return buildHtml({ route: [], secondary, airports: markers });
-  }, [flights, airports]);
+    return buildHtml({ airports: markers });
+  }, [airports]);
 
   useImperativeHandle(ref, () => ({
     setFlight(flight) {
+      currentFlight.current = flight;
       if (!flight?.from || !flight?.to) {
         webRef.current?.postMessage(
           JSON.stringify({ type: "route", route: [] }),
@@ -331,8 +342,8 @@ export const MapView = forwardRef<
         }),
       );
     },
-    setSatellite(value) {
-      webRef.current?.postMessage(JSON.stringify({ type: "satellite", value }));
+    setSatellite() {
+      // No-op: globe has no satellite raster toggle in this implementation.
     },
     setAirports(list) {
       webRef.current?.postMessage(
@@ -377,5 +388,5 @@ export const MapView = forwardRef<
 });
 
 const styles = StyleSheet.create({
-  web: { flex: 1, backgroundColor: "#0b0b0d" },
+  web: { flex: 1, backgroundColor: "#05060a" },
 });
