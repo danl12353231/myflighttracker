@@ -15,17 +15,20 @@ import type { Flight, VisitedAirport } from "../lib/router";
 type LonLat = [number, number];
 
 export function buildRoute(a: LonLat, b: LonLat, steps = 48): LonLat[] {
-  // Great-circle interpolation.
+  // Great-circle interpolation between two lat/lon points.
   const toRad = (d: number) => (d * Math.PI) / 180;
   const toDeg = (d: number) => (d * 180) / Math.PI;
   const la1 = toRad(a[1]);
   const la2 = toRad(b[1]);
-  const dLon = toRad(b[0] - a[0]);
+  const lo1 = toRad(a[0]);
+  const lo2 = toRad(b[0]);
   const la1s = Math.sin(la1);
   const la2s = Math.sin(la2);
   const la1c = Math.cos(la1);
   const la2c = Math.cos(la2);
-  const d = Math.acos(Math.min(1, la1s * la2s + la1c * la2c * Math.cos(dLon)));
+  const d = Math.acos(
+    Math.min(1, Math.max(-1, la1s * la2s + la1c * la2c * Math.cos(lo2 - lo1))),
+  );
   const pts: LonLat[] = [];
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
@@ -34,14 +37,14 @@ export function buildRoute(a: LonLat, b: LonLat, steps = 48): LonLat[] {
       continue;
     }
     const sd = Math.sin(d);
-    const x = la1c * la2c * Math.sin(dLon);
-    const y = la1c * la2s - la1s * la2c * Math.cos(dLon);
-    const z = la1s * la2s + la1c * la2c * Math.cos(dLon);
-    const sina = Math.sin((1 - t) * d) / sd;
-    const sinb = Math.sin(t * d) / sd;
-    const la = la1s * sina + la2s * sinb;
-    const lo = Math.atan2(x * sina + y * sinb, z);
-    pts.push([toDeg(lo), toDeg(Math.asin(la))]);
+    const sa = Math.sin((1 - t) * d) / sd;
+    const sb = Math.sin(t * d) / sd;
+    const x = sa * la1c * Math.cos(lo1) + sb * la2c * Math.cos(lo2);
+    const y = sa * la1c * Math.sin(lo1) + sb * la2c * Math.sin(lo2);
+    const z = sa * la1s + sb * la2s;
+    const lat = toDeg(Math.atan2(z, Math.sqrt(x * x + y * y)));
+    const lon = toDeg(Math.atan2(y, x));
+    pts.push([lon, lat]);
   }
   return pts;
 }
