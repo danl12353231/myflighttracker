@@ -10,7 +10,7 @@ import { CITIES } from "./cities.js";
 
 const GLOBE_R = 1;
 const BORDER_URL =
-  "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
+  "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson";
 
 const INIT = window.__INIT__ || { airports: [], route: [], flights: [] };
 const send = (msg) => {
@@ -122,32 +122,48 @@ function clusterAirports(airports, thresholdDeg) {
 }
 
 function useGeoData() {
-  const [data, setData] = useState({ borderPoints: [], countryLabels: [] });
+  const [data, setData] = useState({ borderRings: [], countryLabels: [] });
   useEffect(() => {
     let cancelled = false;
     fetch(BORDER_URL)
       .then((r) => r.json())
       .then((world) => {
-        const pts = [];
+        const rings = []; // each ring = array of THREE.Vector3 (closed)
         const labels = [];
         const seen = new Set();
         for (const f of world.features) {
           const g = f.geometry;
-          const addRing = (ring) => {
-            for (let i = 0; i < ring.length; i++) {
-              pts.push(llToVec(ring[i][1], ring[i][0], GLOBE_R * 1.003));
-            }
-            pts.push(pts[pts.length - 1]);
-          };
-          const rings = [];
-          if (g.type === "Polygon") rings.push(...g.coordinates);
+          const ringsOfFeature = [];
+          if (g.type === "Polygon") ringsOfFeature.push(...g.coordinates);
           else if (g.type === "MultiPolygon")
-            g.coordinates.forEach((poly) => rings.push(...poly));
-          rings.forEach(addRing);
-          const name = f.properties?.name ?? f.properties?.NAME ?? null;
+            g.coordinates.forEach((poly) => ringsOfFeature.push(...poly));
+          for (const ring of ringsOfFeature) {
+            if (ring.length < 3) continue;
+            const ringVectors = [];
+            for (let i = 0; i < ring.length; i++) {
+              ringVectors.push(llToVec(ring[i][1], ring[i][0], GLOBE_R * 1.003));
+            }
+            // Ensure the ring is closed (repeat first point at the end).
+            if (ringVectors.length > 1) {
+              const last = ringVectors[ringVectors.length - 1];
+              const first = ringVectors[0];
+              if (last.distanceToSquared(first) > 1e-8) {
+                ringVectors.push(first.clone());
+              }
+            }
+            rings.push(ringVectors);
+          }
+          const name = f.properties?.NAME ?? f.properties?.name ?? null;
           if (name && !seen.has(name)) {
             seen.add(String(name));
-            const [lon, lat] = centroidOf(g.coordinates);
+            // Natural Earth provides authoritative label coordinates.
+            let lon = f.properties?.LABEL_X;
+            let lat = f.properties?.LABEL_Y;
+            if (lon == null || lat == null) {
+              const [cLon, cLat] = centroidOf(g.coordinates);
+              lon = cLon;
+              lat = cLat;
+            }
             // Approximate country size from its bounding box span (degrees).
             let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
             const walk = (ring) => {
@@ -168,7 +184,8 @@ function useGeoData() {
             labels.push({ name: String(name), lat, lon, span });
           }
         }
-        if (!cancelled) setData({ borderPoints: pts, countryLabels: labels });
+        if (!cancelled)
+          setData({ borderRings: rings, countryLabels: labels });
       })
       .catch(() => {});
     return () => {
@@ -187,16 +204,38 @@ function Ocean() {
   );
 }
 
-function Borders({ points }) {
-  if (!points.length) return null;
+// Country borders. Each ring (closed country outline) is rendered as its own
+// fat line so borders are complete, crisp and continuous with no connecting
+// artifacts between polygons. worldUnits=false keeps the line width constant
+// in screen pixels, so borders stay clear at any zoom level. A subtle dark
+// halo underneath keeps the bright border legible against the ocean.
+function Borders({ rings }) {
+  if (!rings || !rings.length) return null;
   return (
-    <Line
-      points={points}
-      color="#4a90d9"
-      lineWidth={1.5}
-      transparent
-      opacity={0.75}
-    />
+    <>
+      {rings.map((ring, i) => (
+        <Line
+          key={`r${i}`}
+          points={ring}
+          color="#13406f"
+          lineWidth={6}
+          worldUnits={false}
+          transparent
+          opacity={0.95}
+        />
+      ))}
+      {rings.map((ring, i) => (
+        <Line
+          key={`b${i}`}
+          points={ring}
+          color="#bde8ff"
+          lineWidth={2.5}
+          worldUnits={false}
+          transparent
+          opacity={0.95}
+        />
+      ))}
+    </>
   );
 }
 
@@ -595,7 +634,7 @@ function CameraRig({ onRef }) {
 }
 
 function App() {
-  const { borderPoints, countryLabels } = useGeoData();
+  const { borderRings, countryLabels } = useGeoData();
   const [route, setRoute] = useState(INIT.route || []);
   const [airports, setAirports] = useState(INIT.airports || []);
   const [flights, setFlights] = useState(INIT.flights || []);
@@ -638,7 +677,7 @@ function App() {
         <directionalLight position={[3, 2, 4]} intensity={0.9} />
         <pointLight position={[0, 0, 0]} intensity={0.3} />
         <Ocean />
-        <Borders points={borderPoints} />
+        <Borders rings={borderRings} />
         <LabelLayer countries={labels} level={level} />
         <Airports airports={airports} level={level} controlsRef={controlsRef} />
         <Routes route={route} flights={flights} />
