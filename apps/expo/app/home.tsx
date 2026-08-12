@@ -70,7 +70,6 @@ export default function MapHomeScreen() {
 
   const [expanded, setExpanded] = useState(false);
   const [tab, setTab] = useState<HomeTab>("mine");
-  const [satellite, setSatellite] = useState(false);
   const [airportDetailsId, setAirportDetailsId] = useState<number | null>(null);
   const [searchedAirport, setSearchedAirport] = useState<Airport | null>(null);
   const [flightDetailsId, setFlightDetailsId] = useState<number | null>(null);
@@ -166,20 +165,11 @@ export default function MapHomeScreen() {
     () => (tab === "passport" ? null : (list[0] ?? null)),
     [tab, list],
   );
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  // Tell the map to draw the selected route. Retry until the WebView is ready.
+  // Sync the map selection reactively with the auto-picked flight.
   useEffect(() => {
-    if (!effectiveSelected) return;
-    let tries = 0;
-    const maxTries = 20;
-    const trySet = () => {
-      if (tries >= maxTries) return;
-      tries++;
-      mapRef.current?.setFlight(effectiveSelected);
-      setTimeout(trySet, 250);
-    };
-    const id = setTimeout(trySet, 200);
-    return () => clearTimeout(id);
+    if (effectiveSelected) setSelectedId(effectiveSelected.id);
   }, [effectiveSelected]);
 
   // Resize the dashboard when switching tabs.
@@ -224,6 +214,7 @@ export default function MapHomeScreen() {
           ref={mapRef}
           flights={all}
           airports={visitedAirports}
+          selectedId={selectedId}
           onAirportTap={(id) => {
             setSearchedAirport(null);
             setAirportDetailsId(id);
@@ -236,21 +227,6 @@ export default function MapHomeScreen() {
         style={[styles.controls, { top: insets.top + spacing.mapControlTop }]}
       >
         <View style={styles.controlPill}>
-          <Pressable
-            style={styles.controlBtn}
-            onPress={() => {
-              const next = !satellite;
-              setSatellite(next);
-              mapRef.current?.setSatellite(next);
-            }}
-          >
-            <Ionicons
-              name={satellite ? "layers" : "layers-outline"}
-              size={22}
-              color={colors.textPrimary}
-            />
-          </Pressable>
-          <View style={styles.pillDivider} />
           <Pressable style={styles.controlBtn}>
             <Ionicons
               name="cloud-outline"
@@ -423,7 +399,7 @@ export default function MapHomeScreen() {
                     key={f.id}
                     style={styles.flightRow}
                     onPress={() => {
-                      mapRef.current?.setFlight(f);
+                      setSelectedId(f.id);
                       setFlightDetailsId(f.id);
                     }}
                   >
@@ -487,8 +463,7 @@ export default function MapHomeScreen() {
         onShowFlight={(id) => {
           setAirportDetailsId(null);
           setFlightDetailsId(id);
-          const f = all.find((x) => x.id === id);
-          if (f) mapRef.current?.setFlight(f);
+          setSelectedId(id);
         }}
       />
 
@@ -504,7 +479,7 @@ export default function MapHomeScreen() {
         onClose={() => setSearchOpen(false)}
         onSelectFlight={(f) => {
           setSearchOpen(false);
-          mapRef.current?.setFlight(f);
+          setSelectedId(f.id);
           setFlightDetailsId(f.id);
         }}
         onSelectAirport={(a) => {
