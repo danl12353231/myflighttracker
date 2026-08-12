@@ -6,6 +6,7 @@ import { Line } from "@react-three/drei/core/Line";
 import { OrbitControls } from "@react-three/drei/core/OrbitControls";
 import { Text } from "@react-three/drei/core/Text";
 import { Billboard } from "@react-three/drei/core/Billboard";
+import { CITIES } from "./cities.js";
 
 const GLOBE_R = 1;
 const BORDER_URL =
@@ -147,7 +148,24 @@ function useGeoData() {
           if (name && !seen.has(name)) {
             seen.add(String(name));
             const [lon, lat] = centroidOf(g.coordinates);
-            labels.push({ name: String(name), lat, lon });
+            // Approximate country size from its bounding box span (degrees).
+            let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
+            const walk = (ring) => {
+              for (const p of ring) {
+                if (p[1] < minLat) minLat = p[1];
+                if (p[1] > maxLat) maxLat = p[1];
+                if (p[0] < minLon) minLon = p[0];
+                if (p[0] > maxLon) maxLon = p[0];
+              }
+            };
+            const ringsAll = [];
+            if (g.type === "Polygon") ringsAll.push(...g.coordinates);
+            else if (g.type === "MultiPolygon")
+              g.coordinates.forEach((poly) => ringsAll.push(...poly));
+            ringsAll.forEach(walk);
+            const span =
+              Math.max(0, maxLat - minLat) + Math.max(0, maxLon - minLon);
+            labels.push({ name: String(name), lat, lon, span });
           }
         }
         if (!cancelled) setData({ borderPoints: pts, countryLabels: labels });
@@ -185,53 +203,163 @@ function Borders({ points }) {
 const ORIGIN = new THREE.Vector3(0, 0, 0);
 
 // Per-zoom-level rendering config. Level is derived from the camera's
-// distance to the orbit target (0 = far, 3 = very near).
+// distance to the orbit target (0 = far, 4 = very near).
+// - minCountrySpan: show country labels only for countries at least this
+//   angular size (degrees), reducing clutter when far away.
+// - minPop: show cities with population >= this (millions).
+// - fov: target camera FOV. Lower FOV at close zoom gives a flatter,
+//   more orthographic look that makes countries easier to read.
 const LEVEL_CFG = [
-  { threshold: 1.8, dot: 0.02, clusterDot: 0.028, font: 0.02, showCodes: false },
-  { threshold: 1.0, dot: 0.017, clusterDot: 0.024, font: 0.022, showCodes: true },
-  { threshold: 0.5, dot: 0.015, clusterDot: 0.021, font: 0.028, showCodes: true },
-  { threshold: 0.18, dot: 0.013, clusterDot: 0.019, font: 0.036, showCodes: true },
+  {
+    threshold: 1.9,
+    dot: 0.02,
+    clusterDot: 0.028,
+    font: 0.02,
+    showCodes: false,
+    minCountrySpan: 55,
+    minPop: 8,
+    cityFont: 0.026,
+    fov: 45,
+  },
+  {
+    threshold: 1.3,
+    dot: 0.018,
+    clusterDot: 0.026,
+    font: 0.022,
+    showCodes: false,
+    minCountrySpan: 35,
+    minPop: 4,
+    cityFont: 0.028,
+    fov: 42,
+  },
+  {
+    threshold: 0.8,
+    dot: 0.016,
+    clusterDot: 0.024,
+    font: 0.024,
+    showCodes: true,
+    minCountrySpan: 18,
+    minPop: 1.5,
+    cityFont: 0.03,
+    fov: 38,
+  },
+  {
+    threshold: 0.45,
+    dot: 0.014,
+    clusterDot: 0.021,
+    font: 0.03,
+    showCodes: true,
+    minCountrySpan: 0,
+    minPop: 0.8,
+    cityFont: 0.034,
+    fov: 32,
+  },
+  {
+    threshold: 0.18,
+    dot: 0.013,
+    clusterDot: 0.019,
+    font: 0.038,
+    showCodes: true,
+    minCountrySpan: 0,
+    minPop: 0.3,
+    cityFont: 0.04,
+    fov: 24,
+  },
 ];
 
-// Reports a coarse zoom level (0..3) to the app only when it changes.
+// Drives zoom-dependent rendering. Updates the camera FOV smoothly every
+// frame (flat zoom) and reports the current zoom level (0..4) only when it
+// crosses a boundary, so label re-renders are cheap.
 function ZoomTracker({ onLevel, controlsRef }) {
   const { camera } = useThree();
   const levelRef = useRef(-1);
+  const fovRef = useRef(null);
   useFrame(() => {
     const controls = controlsRef.current;
     const target = controls?.target ?? ORIGIN;
     const d = camera.position.distanceTo(target);
     let level;
-    if (d <= 2.2) level = 3;
-    else if (d <= 3.2) level = 2;
-    else if (d <= 4.6) level = 1;
+    if (d <= 2.4) level = 4;
+    else if (d <= 3.1) level = 3;
+    else if (d <= 3.9) level = 2;
+    else if (d <= 5.2) level = 1;
     else level = 0;
     if (level !== levelRef.current) {
       levelRef.current = level;
       onLevel(level);
+      if (window.__DEBUG__) window.__DEBUG__.level = level;
+    }
+    if (window.__DEBUG__) {
+      window.__DEBUG__.dist = d;
+      window.__DEBUG__.fov = camera.fov;
+    }
+    // Smoothly flatten the projection as we approach the surface.
+    const targetFov = LEVEL_CFG[level].fov;
+    if (fovRef.current === null) fovRef.current = camera.fov;
+    const nextFov = fovRef.current + (targetFov - fovRef.current) * 0.1;
+    if (Math.abs(nextFov - camera.fov) > 0.05) {
+      fovRef.current = nextFov;
+      camera.fov = nextFov;
+      camera.updateProjectionMatrix();
     }
   });
   return null;
 }
 
 function CountryLabels({ labels, level }) {
-  if (level >= 2) return null; // hide countries when zoomed close
-  const font = level === 0 ? 0.024 : 0.022;
+  if (level >= 3) return null; // hide countries when zoomed very close
+  const cfg = LEVEL_CFG[level];
+  const font = level === 0 ? 0.026 : level === 1 ? 0.024 : 0.022;
   return (
     <>
-      {labels.map((c) => (
-        <Billboard key={`c:${c.name}`} position={llToVec(c.lat, c.lon, GLOBE_R * 1.06)}>
-          <Text
-            fontSize={font}
-            color="#7ea8cf"
-            anchorX="center"
-            anchorY="middle"
-            maxWidth={0.5}
+      {labels
+        .filter((c) => c.span >= cfg.minCountrySpan)
+        .map((c) => (
+          <Billboard
+            key={`c:${c.name}`}
+            position={llToVec(c.lat, c.lon, GLOBE_R * 1.06)}
           >
-            {c.name}
-          </Text>
-        </Billboard>
-      ))}
+            <Text
+              fontSize={font}
+              color="#7ea8cf"
+              anchorX="center"
+              anchorY="middle"
+              maxWidth={0.5}
+            >
+              {c.name}
+            </Text>
+          </Billboard>
+        ))}
+    </>
+  );
+}
+
+function Cities({ level }) {
+  const cfg = LEVEL_CFG[level];
+  return (
+    <>
+      {CITIES.filter(([, , , pop]) => pop >= cfg.minPop).map(
+        ([name, lat, lon, pop]) => (
+          <Billboard
+            key={`city:${name}`}
+            position={llToVec(lat, lon, GLOBE_R * 1.07)}
+          >
+            <mesh position={[0, 0, 0]}>
+              <sphereGeometry args={[cfg.dot * 0.55, 8, 8]} />
+              <meshBasicMaterial color="#9cc3e8" transparent opacity={0.9} />
+            </mesh>
+            <Text
+              fontSize={cfg.cityFont}
+              color="#e8f1ff"
+              anchorX="center"
+              anchorY="middle"
+              maxWidth={0.35}
+            >
+              {name}
+            </Text>
+          </Billboard>
+        ),
+      )}
     </>
   );
 }
@@ -371,7 +499,7 @@ function App() {
   const [route, setRoute] = useState(INIT.route || []);
   const [airports, setAirports] = useState(INIT.airports || []);
   const [flights, setFlights] = useState(INIT.flights || []);
-  const [level, setLevel] = useState(1);
+  const [level, setLevel] = useState(0);
   const controlsRef = useRef(null);
 
   useEffect(() => {
@@ -406,7 +534,7 @@ function App() {
   return (
     <>
       <Canvas
-        camera={{ position: [0, 0.5, 3], fov: 45 }}
+        camera={{ position: [0, 0.5, 5], fov: 45 }}
         dpr={[1, 2]}
       >
         <ambientLight intensity={0.7} />
@@ -415,6 +543,7 @@ function App() {
         <Ocean />
         <Borders points={borderPoints} />
         <CountryLabels labels={labels} level={level} />
+        <Cities level={level} />
         <Airports airports={airports} level={level} controlsRef={controlsRef} />
         <Routes route={route} flights={flights} />
         <ZoomTracker onLevel={setLevel} controlsRef={controlsRef} />
@@ -422,9 +551,9 @@ function App() {
           ref={controlsRef}
           enablePan={false}
           minDistance={1.6}
-          maxDistance={8}
+          maxDistance={9}
           rotateSpeed={0.6}
-          zoomSpeed={0.8}
+          zoomSpeed={0.9}
         />
       </Canvas>
       <div
@@ -445,3 +574,4 @@ function App() {
 }
 
 createRoot(document.getElementById("root")).render(<App />);
+window.__DEBUG__ = { level: -1, dist: -1, fov: -1 };
