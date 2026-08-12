@@ -114,28 +114,80 @@ script.onload = function () {
     }
   }
 
+  function ensurePinImage() {
+    if (map.hasImage('apt-pin')) return;
+    var size = 44;
+    var c = document.createElement('canvas');
+    c.width = size;
+    c.height = size;
+    var ctx = c.getContext('2d');
+    // Teardrop / map-pin drawn as a circle + triangle tail.
+    var r = 11;
+    var cx = size / 2;
+    var cy = r + 2;
+    ctx.fillStyle = '#1a73e8';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Tail
+    ctx.beginPath();
+    ctx.moveTo(cx - r / 2, cy + r - 1);
+    ctx.lineTo(cx, size - 3);
+    ctx.lineTo(cx + r / 2, cy + r - 1);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Inner dot
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    ctx.fill();
+    map.addImage('apt-pin', c, { sdf: false, pixelRatio: 2 });
+  }
+
   function drawAirports() {
+    ensurePinImage();
     if (!map.getSource('apts')) {
       map.addSource('apts', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      // Invisible tap target (kept for hit-testing) + pin symbol + name label.
       map.addLayer({
-        id: 'apt-casing', type: 'circle', source: 'apts',
-        paint: { 'circle-radius': 11, 'circle-color': '#0b0b0d', 'circle-opacity': 0.55,
-          'circle-stroke-width': 1, 'circle-stroke-color': 'rgba(255,255,255,0.4)' }
+        id: 'apt-tap', type: 'circle', source: 'apts',
+        paint: { 'circle-radius': 16, 'circle-color': 'rgba(0,0,0,0)', 'circle-opacity': 0 }
+      });
+      map.addLayer({
+        id: 'apt-pins', type: 'symbol', source: 'apts',
+        layout: {
+          'icon-image': 'apt-pin',
+          'icon-size': 0.9,
+          'icon-anchor': 'bottom',
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true
+        }
       });
       map.addLayer({
         id: 'apt-label', type: 'symbol', source: 'apts',
         layout: {
-          'text-field': ['get', 'code'], 'text-size': 11,
-          'text-allow-overlap': true, 'text-ignore-placement': true,
-          'text-anchor': 'center'
+          'text-field': ['get', 'name'],
+          'text-size': 12,
+          'text-anchor': 'bottom',
+          'text-offset': [0, -1.7],
+          'text-allow-overlap': false,
+          'text-ignore-placement': false
         },
-        paint: { 'text-color': '#ffffff', 'text-halo-color': 'rgba(11,11,13,0.85)', 'text-halo-width': 1.5 }
+        paint: {
+          'text-color': '#ffffff',
+          'text-halo-color': 'rgba(11,11,13,0.9)',
+          'text-halo-width': 1.6
+        }
       });
     }
     var feats = FT.airports.map(function (a) {
       return {
         type: 'Feature', geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
-        properties: { id: a.id, code: a.code }
+        properties: { id: a.id, code: a.code, name: a.name || a.code }
       };
     });
     map.getSource('apts').setData({ type: 'FeatureCollection', features: feats });
@@ -200,8 +252,9 @@ script.onload = function () {
   });
 
   // Tap detection for airport markers.
+  var APT_LAYERS = ['apt-tap', 'apt-pins', 'apt-label'];
   map.on('click', function (e) {
-    var feats = map.queryRenderedFeatures(e.point, { layers: ['apt-casing', 'apt-label'] });
+    var feats = map.queryRenderedFeatures(e.point, { layers: APT_LAYERS });
     if (feats.length && feats[0].properties && feats[0].properties.id != null) {
       window.ReactNativeWebView.postMessage(
         JSON.stringify({ type: 'airport', id: Number(feats[0].properties.id) })
@@ -210,8 +263,8 @@ script.onload = function () {
     }
     // Fallback: a slightly larger query window in case the marker is small.
     var nearby = map.queryRenderedFeatures(
-      [[e.point.x - 12, e.point.y - 12], [e.point.x + 12, e.point.y + 12]],
-      { layers: ['apt-casing', 'apt-label'] }
+      [[e.point.x - 14, e.point.y - 14], [e.point.x + 14, e.point.y + 14]],
+      { layers: APT_LAYERS }
     );
     if (nearby.length && nearby[0].properties && nearby[0].properties.id != null) {
       window.ReactNativeWebView.postMessage(
@@ -274,6 +327,7 @@ export const MapView = forwardRef<
     const markers = airports.map((a) => ({
       id: a.id,
       code: a.iata ?? a.icao,
+      name: a.name,
       lon: a.lon,
       lat: a.lat,
     }));
@@ -308,6 +362,7 @@ export const MapView = forwardRef<
           airports: list.map((a) => ({
             id: a.id,
             code: a.iata ?? a.icao,
+            name: a.name,
             lon: a.lon,
             lat: a.lat,
           })),
