@@ -71,7 +71,6 @@ export default function MapHomeScreen() {
   const [expanded, setExpanded] = useState(false);
   const [tab, setTab] = useState<HomeTab>("mine");
   const [satellite, setSatellite] = useState(false);
-  const [globe, setGlobe] = useState(false);
   const [airportDetailsId, setAirportDetailsId] = useState<number | null>(null);
   const [flightDetailsId, setFlightDetailsId] = useState<number | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -234,21 +233,6 @@ export default function MapHomeScreen() {
           >
             <Ionicons
               name={satellite ? "layers" : "layers-outline"}
-              size={22}
-              color={colors.textPrimary}
-            />
-          </Pressable>
-          <View style={styles.pillDivider} />
-          <Pressable
-            style={styles.controlBtn}
-            onPress={() => {
-              const next = !globe;
-              setGlobe(next);
-              mapRef.current?.setProjection(next);
-            }}
-          >
-            <Ionicons
-              name={globe ? "earth" : "earth-outline"}
               size={22}
               color={colors.textPrimary}
             />

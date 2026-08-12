@@ -71,6 +71,8 @@ script.onload = function () {
     style: styleFor(false),
     center: [0, 20],
     zoom: 1.5,
+    minZoom: -2,
+    maxZoom: 22,
     attributionControl: false
   });
   var FT = {
@@ -89,8 +91,8 @@ script.onload = function () {
     try { map.setProjection({ type: FT.globe ? 'globe' : 'mercator' }); } catch (e) {}
     if (FT.globe) {
       map.easeTo({ bearing: 0, pitch: 0, duration: 300 });
-      map.dragRotate.disable();
-      map.touchZoomRotate.disableRotation();
+      map.dragRotate.enable();
+      map.touchZoomRotate.enableRotation();
     } else {
       map.dragRotate.enable();
       map.touchZoomRotate.enableRotation();
@@ -189,28 +191,12 @@ script.onload = function () {
     }));
     drawAirports();
     drawRoute();
-    if (FT.globe) {
-      try { map.setProjection({ type: 'globe' }); } catch (e) {}
-    }
+    try { map.setProjection({ type: 'globe' }); } catch (e) {}
   }
 
   map.on('load', function () {
     reDrawAll();
     applyRoute(window.__INIT__.route);
-    // Start in globe mode (the FT.globe default).
-    setProjection(true);
-  });
-
-  // Auto-switch projection based on zoom level, like Google Earth.
-  map.on('zoomend', function () {
-    var z = map.getZoom();
-    var shouldGlobe = z < 3.5;
-    // If the user-forced projection already matches auto, release the force.
-    if (FT.forceProj && FT.globe === shouldGlobe) FT.forceProj = false;
-    if (FT.forceProj) return;
-    if (FT.globe !== shouldGlobe) {
-      setProjection(shouldGlobe);
-    }
   });
 
   // Tap detection for airport markers.
@@ -242,8 +228,6 @@ script.onload = function () {
       FT.satellite = d.value;
       map.setStyle(styleFor(d.value));
       map.once('styledata', reDrawAll);
-    } else if (d.type === 'projection') {
-      setProjection(!!d.value, true);
     } else if (d.type === 'airports') {
       FT.airports = d.airports || [];
       drawAirports();
@@ -260,7 +244,6 @@ document.head.appendChild(script);
 export type MapViewHandle = {
   setFlight: (flight: Flight | null) => void;
   setSatellite: (value: boolean) => void;
-  setProjection: (globe: boolean) => void;
   setAirports: (airports: VisitedAirport[]) => void;
   recenter: () => void;
 };
@@ -317,11 +300,6 @@ export const MapView = forwardRef<
     },
     setSatellite(value) {
       webRef.current?.postMessage(JSON.stringify({ type: "satellite", value }));
-    },
-    setProjection(globe) {
-      webRef.current?.postMessage(
-        JSON.stringify({ type: "projection", value: globe }),
-      );
     },
     setAirports(list) {
       webRef.current?.postMessage(
