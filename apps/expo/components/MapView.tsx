@@ -24,6 +24,7 @@ export function buildRoute(a: LonLat, b: LonLat, steps = 60): LonLat[] {
 const STYLE_FN = `function styleFor(sat) {
   return {
     version: 8,
+    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
     sources: {
       base: { type: 'raster', tiles: [ sat
         ? ${JSON.stringify(SATELLITE_TILES)}
@@ -138,7 +139,7 @@ script.onload = function () {
         layout: {
           'text-field': ['get', 'name'],
           'text-size': 11,
-          'text-font': ['Open Sans Semibold', 'Arial Unicode MS Regular'],
+          'text-font': ['Open Sans Semibold'],
           'text-anchor': 'bottom',
           'text-offset': [0, -0.8],
           'text-allow-overlap': true,
