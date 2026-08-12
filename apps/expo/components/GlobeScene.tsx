@@ -337,11 +337,6 @@ export function GlobeScene({
     return out;
   }, [countryLabels, airports]);
 
-  const borderArray = useMemo(
-    () => new Float32Array(borderPoints.flatMap((v) => [v.x, v.y, v.z])),
-    [borderPoints],
-  );
-
   const positionsRef = useRef<
     Record<string, { x: number; y: number; behind: boolean }>
   >({});
@@ -368,16 +363,14 @@ export function GlobeScene({
         </mesh>
 
         {/* Country borders */}
-        {borderArray.length > 0 ? (
-          <line>
-            <bufferGeometry>
-              <bufferAttribute
-                attach="attributes-position"
-                args={[borderArray, 3]}
-              />
-            </bufferGeometry>
-            <lineBasicMaterial color="#4a90d9" transparent opacity={0.75} />
-          </line>
+        {borderPoints.length > 2 ? (
+          <Line
+            points={borderPoints}
+            color="#4a90d9"
+            lineWidth={1.5}
+            transparent
+            opacity={0.75}
+          />
         ) : null}
 
         <Routes flights={flights} selectedId={selectedId} />
