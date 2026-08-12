@@ -134,8 +134,8 @@ export const MapView = forwardRef<
         ),
       });
     },
-    setSatellite() {
-      // No-op: globe has no satellite raster toggle.
+    setSatellite(value) {
+      post({ type: "satellite", on: Boolean(value) });
     },
     setAirports(list) {
       latest.current.airports = list;

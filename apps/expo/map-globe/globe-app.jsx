@@ -195,11 +195,48 @@ function useGeoData() {
   return data;
 }
 
-function Ocean() {
+// Injected at build time: a data URI of the bundled NASA Blue Marble image.
+const SATELLITE_URL = __SATELLITE_DATA_URI__;
+
+function Ocean({ satellite }) {
+  const materialRef = useRef(null);
+  const [texture, setTexture] = useState(null);
+
+  // Load the authentic NASA Blue Marble satellite image once, as a GPU
+  // texture, and use it directly on the globe (no color approximation).
+  useEffect(() => {
+    let cancelled = false;
+    const loader = new THREE.TextureLoader();
+    loader.crossOrigin = "anonymous";
+    const tex = loader.load(SATELLITE_URL, () => {
+      if (!cancelled) {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        setTexture(tex);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const mat = materialRef.current;
+    if (!mat) return;
+    if (satellite && texture) {
+      mat.color.set(0xffffff);
+      mat.map = texture;
+      mat.needsUpdate = true;
+    } else if (!satellite) {
+      mat.map = null;
+      mat.color.set(0x0a2540);
+      mat.needsUpdate = true;
+    }
+  }, [satellite, texture]);
+
   return (
     <mesh>
       <sphereGeometry args={[GLOBE_R, 64, 64]} />
-      <meshPhongMaterial color="#0a2540" shininess={12} />
+      <meshPhongMaterial ref={materialRef} color="#0a2540" shininess={8} />
     </mesh>
   );
 }
@@ -638,6 +675,7 @@ function App() {
   const [route, setRoute] = useState(INIT.route || []);
   const [airports, setAirports] = useState(INIT.airports || []);
   const [flights, setFlights] = useState(INIT.flights || []);
+  const [satellite, setSatellite] = useState(false);
   const [level, setLevel] = useState(0);
   const controlsRef = useRef(null);
 
@@ -657,6 +695,7 @@ function App() {
       if (d.type === "route") setRoute(d.route || []);
       else if (d.type === "airports") setAirports(d.airports || []);
       else if (d.type === "flights") setFlights(d.flights || []);
+      else if (d.type === "satellite") setSatellite(Boolean(d.on));
       else if (d.type === "recenter") {
         controlsRef.current?.reset();
       }
@@ -676,7 +715,7 @@ function App() {
         <ambientLight intensity={0.7} />
         <directionalLight position={[3, 2, 4]} intensity={0.9} />
         <pointLight position={[0, 0, 0]} intensity={0.3} />
-        <Ocean />
+        <Ocean satellite={satellite} />
         <Borders rings={borderRings} />
         <LabelLayer countries={labels} level={level} />
         <Airports airports={airports} level={level} controlsRef={controlsRef} />

@@ -69,6 +69,7 @@ export default function MapHomeScreen() {
   const friends = useUpcomingFlights("friends");
 
   const [expanded, setExpanded] = useState(false);
+  const [satelliteOn, setSatelliteOn] = useState(false);
   const [tab, setTab] = useState<HomeTab>("mine");
   const [airportDetailsId, setAirportDetailsId] = useState<number | null>(null);
   const [searchedAirport, setSearchedAirport] = useState<Airport | null>(null);
@@ -226,20 +227,22 @@ export default function MapHomeScreen() {
       <View
         style={[styles.controls, { top: insets.top + spacing.mapControlTop }]}
       >
-        <View style={styles.controlPill}>
-          <Pressable style={styles.controlBtn}>
-            <Ionicons
-              name="cloud-outline"
-              size={22}
-              color={colors.textPrimary}
-            />
-          </Pressable>
-        </View>
         <Pressable
-          style={styles.recenterBtn}
-          onPress={() => mapRef.current?.recenter()}
+          style={[
+            styles.controlPill,
+            satelliteOn && styles.controlPillActive,
+          ]}
+          onPress={() => {
+            const next = !satelliteOn;
+            setSatelliteOn(next);
+            mapRef.current?.setSatellite(next);
+          }}
         >
-          <Ionicons name="airplane" size={24} color={colors.textPrimary} />
+          <Ionicons
+            name={satelliteOn ? "earth" : "earth-outline"}
+            size={22}
+            color={satelliteOn ? colors.accent : colors.textPrimary}
+          />
         </Pressable>
       </View>
 
@@ -530,18 +533,6 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   controlPill: {
-    width: 72,
-    borderRadius: 36,
-    backgroundColor: colors.backgroundSecondary,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingVertical: 6,
-    alignItems: "center",
-    gap: 2,
-  },
-  controlBtn: { padding: 8, alignItems: "center" },
-  pillDivider: { width: 36, height: 1, backgroundColor: colors.divider },
-  recenterBtn: {
     width: 60,
     height: 60,
     borderRadius: 30,
@@ -551,6 +542,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "flex-end",
+  },
+  controlPillActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.backgroundSelected,
   },
 
   dashboard: {
