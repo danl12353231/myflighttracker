@@ -202,74 +202,152 @@ function Borders({ points }) {
 
 const ORIGIN = new THREE.Vector3(0, 0, 0);
 
+// Shared live zoom state (camera distance to orbit target). Updated every
+// frame by ZoomTracker; read by AdaptiveText/AdaptiveDot to keep labels a
+// constant on-screen size regardless of zoom.
+const zoomState = { dist: 5 };
+const LABEL_R = 1.06; // radius where labels float above the surface
+const REF_DIST = 5.0; // distance at which the shrink factor is neutral
+
+// Renders troika Text whose world fontSize is adjusted every frame so the
+// text keeps a roughly constant (slightly shrinking when close) size on
+// screen as the camera zooms and the FOV flattens. baseSize is in screen
+// pixels: world size = basePx * (worldUnitsPerPixel at the label depth).
+function AdaptiveText({ baseSize, children, ...props }) {
+  const { camera, size } = useThree();
+  const textRef = useRef(null);
+  useFrame(() => {
+    const mesh = textRef.current;
+    if (!mesh) return;
+    const d = Math.max(0.3, zoomState.dist);
+    const camToLabel = d - LABEL_R;
+    const fov = camera.fov;
+    // World units spanning one screen pixel at the label's depth.
+    const worldPerPx =
+      (2 * camToLabel * Math.tan((fov * Math.PI) / 360)) / size.height;
+    // Slight shrink when zoomed in so labels never dominate the view.
+    const shrink = Math.min(1, Math.max(0.75, d / REF_DIST));
+    const next = baseSize * worldPerPx * shrink;
+    if (Math.abs(mesh.fontSize - next) > 0.00005) mesh.fontSize = next;
+  });
+  return (
+    <Text ref={textRef} {...props}>
+      {children}
+    </Text>
+  );
+}
+
+// Same adaptive scaling for small marker dots (baseRadius in screen px).
+function AdaptiveDot({ baseRadius, color = "#9cc3e8", opacity = 0.9 }) {
+  const { camera, size } = useThree();
+  const meshRef = useRef(null);
+  useFrame(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const d = Math.max(0.3, zoomState.dist);
+    const camToLabel = d - LABEL_R;
+    const fov = camera.fov;
+    const worldPerPx =
+      (2 * camToLabel * Math.tan((fov * Math.PI) / 360)) / size.height;
+    const shrink = Math.min(1, Math.max(0.7, d / REF_DIST));
+    const next = baseRadius * worldPerPx * shrink;
+    if (Math.abs(mesh.scale.x - next) > 0.00005) mesh.scale.setScalar(next);
+  });
+  return (
+    <mesh ref={meshRef} scale={0.1}>
+      <sphereGeometry args={[1, 8, 8]} />
+      <meshBasicMaterial color={color} transparent opacity={opacity} />
+    </mesh>
+  );
+}
+
 // Per-zoom-level rendering config. Level is derived from the camera's
 // distance to the orbit target (0 = far, 4 = very near).
-// - minCountrySpan: show country labels only for countries at least this
-//   angular size (degrees), reducing clutter when far away.
-// - minPop: show cities with population >= this (millions).
-// - fov: target camera FOV. Lower FOV at close zoom gives a flatter,
-//   more orthographic look that makes countries easier to read.
+// Font/dot sizes are SCREEN-PIXEL targets that AdaptiveText/AdaptiveDot
+// convert to world units per frame, so they stay constant on screen at any
+// zoom. Per-level values act as relative weights (bigger at far zoom).
 const LEVEL_CFG = [
   {
     threshold: 1.9,
-    dot: 0.02,
-    clusterDot: 0.028,
-    font: 0.02,
+    dot: 4,
+    clusterDot: 6,
+    font: 16,
     showCodes: false,
     minCountrySpan: 55,
     minPop: 8,
-    cityFont: 0.026,
+    cityFont: 15,
+    cityDot: 3.5,
+    maxCities: 40,
+    minSepDeg: 22,
+    countryFont: 17,
     fov: 45,
   },
   {
     threshold: 1.3,
-    dot: 0.018,
-    clusterDot: 0.026,
-    font: 0.022,
+    dot: 4,
+    clusterDot: 5.5,
+    font: 15,
     showCodes: false,
     minCountrySpan: 35,
     minPop: 4,
-    cityFont: 0.028,
+    cityFont: 14,
+    cityDot: 3.5,
+    maxCities: 70,
+    minSepDeg: 12,
+    countryFont: 16,
     fov: 42,
   },
   {
     threshold: 0.8,
-    dot: 0.016,
-    clusterDot: 0.024,
-    font: 0.024,
+    dot: 4,
+    clusterDot: 5.5,
+    font: 15,
     showCodes: true,
     minCountrySpan: 18,
     minPop: 1.5,
-    cityFont: 0.03,
+    cityFont: 14,
+    cityDot: 3.5,
+    maxCities: 120,
+    minSepDeg: 7,
+    countryFont: 15,
     fov: 38,
   },
   {
     threshold: 0.45,
-    dot: 0.014,
-    clusterDot: 0.021,
-    font: 0.03,
+    dot: 4,
+    clusterDot: 5.5,
+    font: 15,
     showCodes: true,
     minCountrySpan: 0,
     minPop: 0.8,
-    cityFont: 0.034,
+    cityFont: 14,
+    cityDot: 3.5,
+    maxCities: 200,
+    minSepDeg: 3,
+    countryFont: 0,
     fov: 32,
   },
   {
     threshold: 0.18,
-    dot: 0.013,
-    clusterDot: 0.019,
-    font: 0.038,
+    dot: 4,
+    clusterDot: 5.5,
+    font: 15,
     showCodes: true,
     minCountrySpan: 0,
     minPop: 0.3,
-    cityFont: 0.04,
+    cityFont: 12,
+    cityDot: 3.5,
+    maxCities: 300,
+    minSepDeg: 1.8,
+    countryFont: 0,
     fov: 24,
   },
 ];
 
 // Drives zoom-dependent rendering. Updates the camera FOV smoothly every
-// frame (flat zoom) and reports the current zoom level (0..4) only when it
-// crosses a boundary, so label re-renders are cheap.
+// frame (flat zoom), tracks the live camera distance for adaptive label
+// sizing, and reports the current zoom level (0..4) only when it crosses a
+// boundary so label re-renders are cheap.
 function ZoomTracker({ onLevel, controlsRef }) {
   const { camera } = useThree();
   const levelRef = useRef(-1);
@@ -278,6 +356,7 @@ function ZoomTracker({ onLevel, controlsRef }) {
     const controls = controlsRef.current;
     const target = controls?.target ?? ORIGIN;
     const d = camera.position.distanceTo(target);
+    zoomState.dist = d;
     let level;
     if (d <= 2.4) level = 4;
     else if (d <= 3.1) level = 3;
@@ -306,60 +385,80 @@ function ZoomTracker({ onLevel, controlsRef }) {
   return null;
 }
 
-function CountryLabels({ labels, level }) {
-  if (level >= 3) return null; // hide countries when zoomed very close
+// Unified label declutter. Countries and cities are merged into one
+// candidate list sorted by priority (bigger countries and bigger cities
+// first), then labels are kept greedily if their anchor is at least
+// `minSepDeg` away from every already-kept label. Combined with adaptive
+// on-screen text sizing, this keeps labels readable and non-overlapping at
+// every zoom level without culling everything when zoomed in.
+function LabelLayer({ countries, level }) {
   const cfg = LEVEL_CFG[level];
-  const font = level === 0 ? 0.026 : level === 1 ? 0.024 : 0.022;
+
+  const shown = useMemo(() => {
+    const out = [];
+    if (cfg.countryFont > 0 && level < 3) {
+      for (const c of countries) {
+        if (c.span < cfg.minCountrySpan) continue;
+        out.push({
+          key: `c:${c.name}`,
+          kind: "country",
+          name: c.name,
+          lat: c.lat,
+          lon: c.lon,
+          priority: c.span,
+          size: cfg.countryFont,
+          color: "#7ea8cf",
+        });
+      }
+    }
+    const eligible = CITIES.filter(([, , , pop]) => pop >= cfg.minPop)
+      .slice()
+      .sort((a, b) => b[3] - a[3]);
+    for (let i = 0; i < Math.min(cfg.maxCities, eligible.length); i++) {
+      const [name, lat, lon, pop] = eligible[i];
+      out.push({
+        key: `city:${name}`,
+        kind: "city",
+        name,
+        lat,
+        lon,
+        priority: 100 + pop,
+        size: cfg.cityFont,
+        color: "#e8f1ff",
+      });
+    }
+    out.sort((a, b) => b.priority - a.priority);
+    const kept = [];
+    for (const c of out) {
+      let tooClose = false;
+      for (const k of kept) {
+        if (distDeg(k.lat, k.lon, c.lat, c.lon) < cfg.minSepDeg) {
+          tooClose = true;
+          break;
+        }
+      }
+      if (!tooClose) kept.push(c);
+    }
+    return kept;
+  }, [countries, level, cfg.minCountrySpan, cfg.minPop, cfg.maxCities, cfg.minSepDeg, cfg.countryFont, cfg.cityFont]);
+
   return (
     <>
-      {labels
-        .filter((c) => c.span >= cfg.minCountrySpan)
-        .map((c) => (
-          <Billboard
-            key={`c:${c.name}`}
-            position={llToVec(c.lat, c.lon, GLOBE_R * 1.06)}
-          >
-            <Text
-              fontSize={font}
-              color="#7ea8cf"
+      {shown.map((l) => (
+        <group key={l.key} position={llToVec(l.lat, l.lon, GLOBE_R * 1.02)}>
+          <Billboard position={llToVec(l.lat, l.lon, GLOBE_R * 1.09)}>
+            <AdaptiveText
+              baseSize={l.size}
+              color={l.color}
               anchorX="center"
-              anchorY="middle"
+              anchorY={l.kind === "city" ? "bottom" : "middle"}
               maxWidth={0.5}
             >
-              {c.name}
-            </Text>
+              {l.name}
+            </AdaptiveText>
           </Billboard>
-        ))}
-    </>
-  );
-}
-
-function Cities({ level }) {
-  const cfg = LEVEL_CFG[level];
-  return (
-    <>
-      {CITIES.filter(([, , , pop]) => pop >= cfg.minPop).map(
-        ([name, lat, lon, pop]) => (
-          <Billboard
-            key={`city:${name}`}
-            position={llToVec(lat, lon, GLOBE_R * 1.07)}
-          >
-            <mesh position={[0, 0, 0]}>
-              <sphereGeometry args={[cfg.dot * 0.55, 8, 8]} />
-              <meshBasicMaterial color="#9cc3e8" transparent opacity={0.9} />
-            </mesh>
-            <Text
-              fontSize={cfg.cityFont}
-              color="#e8f1ff"
-              anchorX="center"
-              anchorY="middle"
-              maxWidth={0.35}
-            >
-              {name}
-            </Text>
-          </Billboard>
-        ),
-      )}
+        </group>
+      ))}
     </>
   );
 }
@@ -375,7 +474,7 @@ function Airports({ airports, level, controlsRef }) {
     if (!controls) return;
     const dir = llToVec(lat, lon, 1).normalize();
     controls.target.copy(dir.clone().multiplyScalar(GLOBE_R));
-    controls.object.position.copy(dir.clone().multiplyScalar(GLOBE_R + 1.8));
+    controls.object.position.copy(dir.clone().multiplyScalar(GLOBE_R + 3.4));
     controls.object.lookAt(controls.target);
     controls.update();
   };
@@ -392,7 +491,7 @@ function Airports({ airports, level, controlsRef }) {
         const multi = c.count > 1;
         return (
           <group key={c.airports[0].id}>
-            <mesh
+            <group
               position={pos}
               onClick={(e) => {
                 if (multi) focus(e, c.lat, c.lon);
@@ -403,33 +502,34 @@ function Airports({ airports, level, controlsRef }) {
                 else handle(e, c.airports[0].id);
               }}
             >
-              <sphereGeometry
-                args={[multi ? cfg.clusterDot : cfg.dot, 12, 12]}
+              <AdaptiveDot
+                baseRadius={multi ? cfg.clusterDot : cfg.dot}
+                color={multi ? "#f59e0b" : "#1a73e8"}
+                opacity={1}
               />
-              <meshBasicMaterial color={multi ? "#f59e0b" : "#1a73e8"} />
-            </mesh>
+            </group>
             {multi ? (
               <Billboard position={pos}>
-                <Text
-                  fontSize={cfg.font * 0.9}
+                <AdaptiveText
+                  baseSize={cfg.font * 0.9}
                   color="#ffd166"
                   anchorX="center"
                   anchorY="middle"
                 >
                   {c.count}
-                </Text>
+                </AdaptiveText>
               </Billboard>
             ) : cfg.showCodes ? (
               <Billboard position={llToVec(c.lat, c.lon, GLOBE_R * 1.06)}>
-                <Text
-                  fontSize={cfg.font}
+                <AdaptiveText
+                  baseSize={cfg.font}
                   color="#ffffff"
                   anchorX="center"
                   anchorY="middle"
                   maxWidth={0.4}
                 >
                   {c.airports[0].code}
-                </Text>
+                </AdaptiveText>
               </Billboard>
             ) : null}
           </group>
@@ -526,10 +626,7 @@ function App() {
     return () => window.removeEventListener("message", onMsg);
   }, []);
 
-  const labels = useMemo(() => {
-    const out = countryLabels.map((c) => ({ name: c.name, lat: c.lat, lon: c.lon }));
-    return out;
-  }, [countryLabels]);
+  const labels = useMemo(() => countryLabels, [countryLabels]);
 
   return (
     <>
@@ -542,8 +639,7 @@ function App() {
         <pointLight position={[0, 0, 0]} intensity={0.3} />
         <Ocean />
         <Borders points={borderPoints} />
-        <CountryLabels labels={labels} level={level} />
-        <Cities level={level} />
+        <LabelLayer countries={labels} level={level} />
         <Airports airports={airports} level={level} controlsRef={controlsRef} />
         <Routes route={route} flights={flights} />
         <ZoomTracker onLevel={setLevel} controlsRef={controlsRef} />
