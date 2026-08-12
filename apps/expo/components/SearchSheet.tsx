@@ -11,9 +11,9 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
-import { useFlights } from "../lib/api";
+import { useAirportSearch, useFlights } from "../lib/api";
 import { colors } from "../lib/theme";
-import type { Flight } from "../lib/router";
+import type { Airport, Flight } from "../lib/router";
 
 const codeOf = (f: Flight, end: "from" | "to") => {
   const a = end === "from" ? f.from : f.to;
@@ -24,19 +24,23 @@ export function SearchSheet({
   visible,
   onClose,
   onSelectFlight,
+  onSelectAirport,
 }: {
   visible: boolean;
   onClose: () => void;
   onSelectFlight: (f: Flight) => void;
+  onSelectAirport: (a: Airport) => void;
 }) {
   const router = useRouter();
   const all = useFlights("mine");
   const [q, setQ] = useState("");
+  const trimmed = q.trim();
+  const airportSearch = useAirportSearch(trimmed, trimmed.length > 0);
 
   const results = useMemo(() => {
     const flights = all.data ?? [];
-    if (!q.trim()) return flights;
-    const needle = q.toLowerCase();
+    if (!trimmed) return flights;
+    const needle = trimmed.toLowerCase();
     return flights.filter((f) =>
       [
         f.flightNumber,
@@ -57,7 +61,13 @@ export function SearchSheet({
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(needle)),
     );
-  }, [all.data, q]);
+  }, [all.data, trimmed]);
+
+  const airports = useMemo(
+    () => airportSearch.data ?? [],
+    [airportSearch.data],
+  );
+  const hasQuery = trimmed.length > 0;
 
   return (
     <Modal
@@ -70,7 +80,7 @@ export function SearchSheet({
       <View style={styles.sheet}>
         <View style={styles.handle} />
         <View style={styles.header}>
-          <Text style={styles.title}>Search flights</Text>
+          <Text style={styles.title}>Search</Text>
           <Pressable style={styles.closeBtn} onPress={onClose}>
             <Ionicons name="close" size={22} color={colors.textPrimary} />
           </Pressable>
@@ -79,7 +89,7 @@ export function SearchSheet({
           <Ionicons name="search" size={18} color={colors.textSecondary} />
           <TextInput
             style={styles.input}
-            placeholder="Flight number, airline, airport, date…"
+            placeholder="Flights, airports, airlines…"
             placeholderTextColor={colors.textSecondary}
             value={q}
             onChangeText={setQ}
@@ -97,41 +107,92 @@ export function SearchSheet({
             </Pressable>
           ) : null}
         </View>
+
         <ScrollView
           contentContainerStyle={styles.list}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Airports section */}
+          {hasQuery ? (
+            <>
+              {airportSearch.isLoading ? (
+                <Text style={styles.sectionEmpty}>Searching airports…</Text>
+              ) : airports.length > 0 ? (
+                <>
+                  <Text style={styles.sectionTitle}>Airports</Text>
+                  {airports.map((a) => (
+                    <Pressable
+                      key={a.id}
+                      style={styles.row}
+                      onPress={() => {
+                        onSelectAirport(a);
+                        setQ("");
+                      }}
+                    >
+                      <View style={styles.rowMain}>
+                        <Text style={styles.rowRoute}>
+                          {a.iata ?? a.icao}
+                          {a.iata ? ` · ${a.icao}` : ""}
+                        </Text>
+                        <Text style={styles.rowMeta} numberOfLines={1}>
+                          {a.name} · {a.municipality ?? a.country}
+                        </Text>
+                      </View>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={18}
+                        color={colors.textSecondary}
+                      />
+                    </Pressable>
+                  ))}
+                </>
+              ) : null}
+            </>
+          ) : null}
+
+          {/* Flights section */}
           {all.isLoading ? (
-            <Text style={styles.empty}>Loading flights…</Text>
-          ) : results.length === 0 ? (
-            <Text style={styles.empty}>No flights match your search.</Text>
-          ) : (
-            results.map((f) => (
-              <Pressable
-                key={f.id}
-                style={styles.row}
-                onPress={() => {
-                  onSelectFlight(f);
-                  setQ("");
-                }}
-              >
-                <View style={styles.rowMain}>
-                  <Text style={styles.rowRoute}>
-                    {codeOf(f, "from")} → {codeOf(f, "to")}
-                  </Text>
-                  <Text style={styles.rowMeta} numberOfLines={1}>
-                    {f.flightNumber ?? ""}{" "}
-                    {f.airline ? `· ${f.airline.name}` : ""} · {f.date}
-                  </Text>
-                </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={18}
-                  color={colors.textSecondary}
-                />
-              </Pressable>
-            ))
-          )}
+            <Text style={styles.sectionEmpty}>Loading flights…</Text>
+          ) : results.length > 0 ? (
+            <>
+              <Text style={styles.sectionTitle}>Flights</Text>
+              {results.map((f) => (
+                <Pressable
+                  key={f.id}
+                  style={styles.row}
+                  onPress={() => {
+                    onSelectFlight(f);
+                    setQ("");
+                  }}
+                >
+                  <View style={styles.rowMain}>
+                    <Text style={styles.rowRoute}>
+                      {codeOf(f, "from")} → {codeOf(f, "to")}
+                    </Text>
+                    <Text style={styles.rowMeta} numberOfLines={1}>
+                      {f.flightNumber ?? ""}{" "}
+                      {f.airline ? `· ${f.airline.name}` : ""} · {f.date}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={colors.textSecondary}
+                  />
+                </Pressable>
+              ))}
+            </>
+          ) : null}
+
+          {hasQuery &&
+          !airportSearch.isLoading &&
+          airports.length === 0 &&
+          results.length === 0 ? (
+            <Text style={styles.sectionEmpty}>
+              No results match your search.
+            </Text>
+          ) : null}
+
           <Pressable
             style={styles.addRow}
             onPress={() => {
@@ -204,6 +265,20 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   list: { gap: 2, paddingTop: 12 },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.textSecondary,
+    textTransform: "uppercase",
+    marginTop: 8,
+    marginBottom: 2,
+  },
+  sectionEmpty: {
+    textAlign: "center",
+    color: colors.textSecondary,
+    paddingVertical: 18,
+    fontSize: 13,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -233,10 +308,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   addText: { fontSize: 15, fontWeight: "600", color: colors.accent },
-  empty: {
-    textAlign: "center",
-    color: colors.textSecondary,
-    paddingVertical: 24,
-    fontSize: 14,
-  },
 });

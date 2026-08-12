@@ -22,7 +22,7 @@ import { useAuth } from "../lib/auth";
 import { useFlights, useUpcomingFlights } from "../lib/api";
 import { prepareVisitedAirports } from "../lib/visited-airports";
 import { fs } from "../lib/fonts";
-import type { Flight, VisitedAirport } from "../lib/router";
+import type { Airport, Flight, VisitedAirport } from "../lib/router";
 import { colors, spacing, statusMeta, type FlightStatus } from "../lib/theme";
 
 const formatTime = (iso: string | null | undefined) => {
@@ -72,6 +72,7 @@ export default function MapHomeScreen() {
   const [tab, setTab] = useState<HomeTab>("mine");
   const [satellite, setSatellite] = useState(false);
   const [airportDetailsId, setAirportDetailsId] = useState<number | null>(null);
+  const [searchedAirport, setSearchedAirport] = useState<Airport | null>(null);
   const [flightDetailsId, setFlightDetailsId] = useState<number | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -139,10 +140,19 @@ export default function MapHomeScreen() {
     tab === "mine" ? "My Flights" : tab === "friends" ? "Friends" : "Passport";
 
   const visitedAirports = useMemo(() => prepareVisitedAirports(all), [all]);
-  const airportDetails = useMemo(
-    () => visitedAirports.find((a) => a.id === airportDetailsId) ?? null,
-    [visitedAirports, airportDetailsId],
-  );
+  const airportDetails = useMemo<VisitedAirport | null>(() => {
+    if (searchedAirport) {
+      // Build a visited-airport shape from a searched airport (no flight stats).
+      return {
+        ...searchedAirport,
+        departures: 0,
+        arrivals: 0,
+        airlines: [],
+        frequency: 1,
+      };
+    }
+    return visitedAirports.find((a) => a.id === airportDetailsId) ?? null;
+  }, [visitedAirports, airportDetailsId, searchedAirport]);
   const airportFlights = useMemo(
     () =>
       all.filter(
@@ -214,7 +224,10 @@ export default function MapHomeScreen() {
           ref={mapRef}
           flights={all}
           airports={visitedAirports}
-          onAirportTap={(id) => setAirportDetailsId(id)}
+          onAirportTap={(id) => {
+            setSearchedAirport(null);
+            setAirportDetailsId(id);
+          }}
         />
       </View>
 
@@ -467,7 +480,10 @@ export default function MapHomeScreen() {
         visible={!!airportDetails}
         airport={airportDetails}
         relatedFlights={airportFlights}
-        onClose={() => setAirportDetailsId(null)}
+        onClose={() => {
+          setAirportDetailsId(null);
+          setSearchedAirport(null);
+        }}
         onShowFlight={(id) => {
           setAirportDetailsId(null);
           setFlightDetailsId(id);
@@ -490,6 +506,11 @@ export default function MapHomeScreen() {
           setSearchOpen(false);
           mapRef.current?.setFlight(f);
           setFlightDetailsId(f.id);
+        }}
+        onSelectAirport={(a) => {
+          setSearchOpen(false);
+          setSearchedAirport(a);
+          setAirportDetailsId(a.id);
         }}
       />
     </View>
