@@ -114,73 +114,45 @@ script.onload = function () {
     }
   }
 
-  function ensurePinImage() {
-    if (map.hasImage('apt-pin')) return;
-    var size = 44;
-    var c = document.createElement('canvas');
-    c.width = size;
-    c.height = size;
-    var ctx = c.getContext('2d');
-    // Teardrop / map-pin drawn as a circle + triangle tail.
-    var r = 11;
-    var cx = size / 2;
-    var cy = r + 2;
-    ctx.fillStyle = '#1a73e8';
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    // Tail
-    ctx.beginPath();
-    ctx.moveTo(cx - r / 2, cy + r - 1);
-    ctx.lineTo(cx, size - 3);
-    ctx.lineTo(cx + r / 2, cy + r - 1);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    // Inner dot
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
-    ctx.fill();
-    map.addImage('apt-pin', c, { sdf: false, pixelRatio: 2 });
-  }
-
   function drawAirports() {
-    ensurePinImage();
     if (!map.getSource('apts')) {
       map.addSource('apts', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      // Invisible tap target (kept for hit-testing) + pin symbol + name label.
+      // Invisible tap target.
       map.addLayer({
         id: 'apt-tap', type: 'circle', source: 'apts',
-        paint: { 'circle-radius': 16, 'circle-color': 'rgba(0,0,0,0)', 'circle-opacity': 0 }
+        paint: { 'circle-radius': 18, 'circle-color': 'rgba(0,0,0,0)', 'circle-opacity': 0 }
       });
+      // Pin dot (tip of the pin).
       map.addLayer({
-        id: 'apt-pins', type: 'symbol', source: 'apts',
-        layout: {
-          'icon-image': 'apt-pin',
-          'icon-size': 0.9,
-          'icon-anchor': 'bottom',
-          'icon-allow-overlap': true,
-          'icon-ignore-placement': true
+        id: 'apt-dot', type: 'circle', source: 'apts',
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#1a73e8',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff'
         }
       });
+      // Label chip above the pin.
       map.addLayer({
         id: 'apt-label', type: 'symbol', source: 'apts',
         layout: {
           'text-field': ['get', 'name'],
-          'text-size': 12,
+          'text-size': 11,
+          'text-font': ['Open Sans Semibold', 'Arial Unicode MS Regular'],
           'text-anchor': 'bottom',
-          'text-offset': [0, -1.7],
-          'text-allow-overlap': false,
-          'text-ignore-placement': false
+          'text-offset': [0, -0.8],
+          'text-allow-overlap': true,
+          'text-ignore-placement': true,
+          'text-padding': [3, 5]
         },
         paint: {
           'text-color': '#ffffff',
           'text-halo-color': 'rgba(11,11,13,0.9)',
-          'text-halo-width': 1.6
+          'text-halo-width': 1.4,
+          'text-background-color': 'rgba(11,11,13,0.72)',
+          'text-background-opacity': 1,
+          'text-border-color': 'rgba(255,255,255,0.28)',
+          'text-border-width': 1
         }
       });
     }
@@ -252,7 +224,7 @@ script.onload = function () {
   });
 
   // Tap detection for airport markers.
-  var APT_LAYERS = ['apt-tap', 'apt-pins', 'apt-label'];
+  var APT_LAYERS = ['apt-tap', 'apt-dot', 'apt-label'];
   map.on('click', function (e) {
     var feats = map.queryRenderedFeatures(e.point, { layers: APT_LAYERS });
     if (feats.length && feats[0].properties && feats[0].properties.id != null) {
