@@ -224,6 +224,7 @@ export default function MapHomeScreen() {
           ref={mapRef}
           flights={all}
           airports={visitedAirports}
+          satellite={satellite}
           onAirportTap={(id) => {
             setSearchedAirport(null);
             setAirportDetailsId(id);
@@ -239,9 +240,7 @@ export default function MapHomeScreen() {
           <Pressable
             style={styles.controlBtn}
             onPress={() => {
-              const next = !satellite;
-              setSatellite(next);
-              mapRef.current?.setSatellite(next);
+              setSatellite(!satellite);
             }}
           >
             <Ionicons
